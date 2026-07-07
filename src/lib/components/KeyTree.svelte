@@ -43,10 +43,10 @@
 
     try {
       const keys: string[] = [];
-      let cursor = "0";
+      let cursor = 0;
 
       do {
-        const result = await invoke<{ cursor: string; keys: string[] }>(
+        const result = await invoke<{ cursor: number; keys: string[] }>(
           "scan_keys",
           {
             connectionId,
@@ -57,7 +57,7 @@
         );
         cursor = result.cursor;
         keys.push(...result.keys);
-      } while (cursor !== "0");
+      } while (cursor !== 0);
 
       allKeys = keys;
       displayedCount = Math.min(PAGE_SIZE, keys.length);
