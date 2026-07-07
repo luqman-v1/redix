@@ -1,6 +1,9 @@
 use tauri::State;
 
 use crate::config::{ConnectionConfig, ConnectionStore};
+use crate::commands::keys::ConnectionManager;
+use crate::redis::standalone::StandaloneClient;
+use crate::redis::client::RedisClient;
 
 #[tauri::command]
 pub fn get_connections(store: State<'_, ConnectionStore>) -> Result<Vec<ConnectionConfig>, String> {
@@ -41,4 +44,23 @@ pub fn test_connection(config: ConnectionConfig) -> Result<bool, String> {
     }
     // ponytail: actual TCP/Redis ping skipped, add when connection pool impl lands
     Ok(true)
+}
+
+#[tauri::command]
+pub async fn reconnect(
+    connection_id: String,
+    store: State<'_, ConnectionStore>,
+    manager: State<'_, ConnectionManager>,
+) -> Result<(), String> {
+    let uuid = uuid::Uuid::parse_str(&connection_id).map_err(|e| format!("invalid uuid: {}", e))?;
+    let configs = store.load()?;
+    let config = configs
+        .into_iter()
+        .find(|c| c.id == uuid)
+        .ok_or("config not found")?;
+    let mut client = StandaloneClient::new(config);
+    client.connect().await?;
+    let mut map = manager.lock().await;
+    map.insert(connection_id, Box::new(client) as Box<dyn RedisClient>);
+    Ok(())
 }

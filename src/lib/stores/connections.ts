@@ -1,6 +1,7 @@
 import { writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnectionConfig } from "$lib/types/connection";
+import { toasts } from "./toasts";
 
 function createConnectionStore() {
   const { subscribe, set, update } = writable<ConnectionConfig[]>([]);
@@ -34,3 +35,17 @@ function createConnectionStore() {
 
 export const connections = createConnectionStore();
 export const activeConnection = writable<ConnectionConfig | null>(null);
+
+export async function withReconnect<T>(connId: string, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.toString() : String(e);
+    if (msg.includes("connection") || msg.includes("refused")) {
+      toasts.add("Connection lost, reconnecting...", "warning");
+      await invoke("reconnect", { connectionId: connId });
+      return await fn();
+    }
+    throw e;
+  }
+}
