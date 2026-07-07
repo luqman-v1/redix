@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import Layout from "$lib/components/Layout.svelte";
+  import ToastContainer from "$lib/components/ToastContainer.svelte";
   import ThemeToggle from "$lib/components/ThemeToggle.svelte";
   import ConnectionList from "$lib/components/ConnectionList.svelte";
   import KeyTree from "$lib/components/KeyTree.svelte";
@@ -62,6 +63,7 @@
   {/if}
 {/snippet}
 
+<ToastContainer />
 <Layout {sidebar} {main} {bottom} />
 
 <style>
