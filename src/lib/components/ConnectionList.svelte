@@ -1,16 +1,13 @@
 <script lang="ts">
+  import { get } from "svelte/store";
   import type { ConnectionConfig } from "$lib/types/connection";
   import { connections, activeConnection, connectToServer } from "$lib/stores/connections";
   import ConnectionForm from "./ConnectionForm.svelte";
 
   let showForm = $state(false);
   let editingConnection = $state<ConnectionConfig | null>(null);
-  let connectionList = $state<ConnectionConfig[]>([]);
-
-  connections.subscribe((v) => (connectionList = v));
-
-  let active = $state<ConnectionConfig | null>(null);
-  activeConnection.subscribe((v) => (active = v));
+  let connectionList = $derived(get(connections));
+  let active = $derived(get(activeConnection));
 
   function openAdd() {
     editingConnection = null;

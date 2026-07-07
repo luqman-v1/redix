@@ -10,7 +10,7 @@ export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
   const root: Record<string, TreeNode> = {};
 
   for (const key of keys) {
-    const parts = key.split(separator);
+    const parts = key.split(separator).filter(p => p.length > 0);
     let current = root;
     let path = "";
 

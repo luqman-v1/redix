@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
+  import { get } from "svelte/store";
   import { history } from "$lib/stores/history";
 
   let { connectionId }: { connectionId: string } = $props();
@@ -17,12 +18,10 @@
   let input = $state("");
   let loading = $state(false);
   let historyIndex = $state(-1);
-  let historyItems = $state<string[]>([]);
   let outputEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
 
-  // Track history store
-  history.subscribe((v) => (historyItems = v));
+  let historyItems = $derived(get(history));
 
   $effect(() => {
     connectionId;
@@ -78,12 +77,7 @@
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      execute(input);
-      return;
-    }
-
-    if (e.key === "Enter" && e.shiftKey) {
-      e.preventDefault();
+      await execute(input);
       return;
     }
 
