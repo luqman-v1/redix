@@ -2914,6 +2914,7 @@ dependencies = [
  "futures-util",
  "itertools",
  "itoa",
+ "log",
  "num-bigint",
  "percent-encoding",
  "pin-project-lite",
