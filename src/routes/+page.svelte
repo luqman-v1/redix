@@ -3,6 +3,8 @@
   import Layout from "$lib/components/Layout.svelte";
   import ThemeToggle from "$lib/components/ThemeToggle.svelte";
   import ConnectionList from "$lib/components/ConnectionList.svelte";
+  import KeyTree from "$lib/components/KeyTree.svelte";
+  import Console from "$lib/components/Console.svelte";
   import { connections, activeConnection } from "$lib/stores/connections";
   import type { ConnectionConfig } from "$lib/types/connection";
 
@@ -12,6 +14,11 @@
   onMount(() => {
     connections.load();
   });
+
+  function handleKeySelect(key: string) {
+    // placeholder: Phase 4 adds value display
+    console.log("selected key:", key);
+  }
 </script>
 
 {#snippet sidebar()}
@@ -21,6 +28,13 @@
       <ThemeToggle />
     </div>
     <ConnectionList />
+    {#if active}
+      <KeyTree
+        connectionId={active.id}
+        separator={active.key_separator}
+        onselect={handleKeySelect}
+      />
+    {/if}
   </div>
 {/snippet}
 
@@ -39,9 +53,13 @@
 {/snippet}
 
 {#snippet bottom()}
-  <div class="bottom-bar">
-    Command console
-  </div>
+  {#if active}
+    <Console connectionId={active.id} />
+  {:else}
+    <div class="bottom-bar">
+      Command console
+    </div>
+  {/if}
 {/snippet}
 
 <Layout {sidebar} {main} {bottom} />
