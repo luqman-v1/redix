@@ -185,4 +185,59 @@ mod tests {
         assert_eq!(serde_json::to_string(&ConnectionType::Cluster).unwrap(), "\"cluster\"");
         assert_eq!(serde_json::to_string(&ConnectionType::Sentinel).unwrap(), "\"sentinel\"");
     }
+
+    #[test]
+    fn test_connection_config_with_all_fields() {
+        let config = ConnectionConfig {
+            id: Uuid::new_v4(),
+            name: "full".to_string(),
+            host: "redis.example.com".to_string(),
+            port: 6380,
+            db: 3,
+            password: Some("secret".to_string()),
+            username: Some("admin".to_string()),
+            connection_type: ConnectionType::Cluster,
+            key_separator: "::".to_string(),
+            ssh: Some(SshConfig {
+                host: "bastion.example.com".to_string(),
+                port: 2222,
+                username: "ec2-user".to_string(),
+                auth: SshAuth::Password("sshpass".to_string()),
+            }),
+            ssl: Some(SslConfig {
+                ca_cert: Some(PathBuf::from("/etc/ssl/ca.pem")),
+                client_cert: None,
+                client_key: None,
+                skip_verify: true,
+            }),
+            readonly: true,
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ConnectionConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config, deserialized);
+        assert_eq!(deserialized.password, Some("secret".to_string()));
+        assert_eq!(deserialized.username, Some("admin".to_string()));
+        assert!(deserialized.ssh.is_some());
+        assert!(deserialized.ssl.is_some());
+        assert!(deserialized.readonly);
+    }
+
+    #[test]
+    fn test_connection_type_serialization() {
+        let config = ConnectionConfig::new("test", "localhost", 6379);
+        let json = serde_json::to_value(&config).unwrap();
+        assert!(json.get("type").is_some(), "JSON must have 'type' field");
+        assert_eq!(json["type"], "standalone");
+
+        let mut cluster_config = ConnectionConfig::new("cluster", "localhost", 6379);
+        cluster_config.connection_type = ConnectionType::Cluster;
+        let json = serde_json::to_value(&cluster_config).unwrap();
+        assert_eq!(json["type"], "cluster");
+
+        let mut sentinel_config = ConnectionConfig::new("sentinel", "localhost", 6379);
+        sentinel_config.connection_type = ConnectionType::Sentinel;
+        let json = serde_json::to_value(&sentinel_config).unwrap();
+        assert_eq!(json["type"], "sentinel");
+    }
 }

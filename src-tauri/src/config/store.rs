@@ -196,4 +196,46 @@ mod tests {
             "file should not contain plaintext host"
         );
     }
+
+    #[test]
+    fn test_update_nonexistent_returns_error() {
+        let (store, _dir) = temp_store();
+        let config = ConnectionConfig::new("ghost", "localhost", 6379);
+        let result = store.update(config);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("connection not found"));
+    }
+
+    #[test]
+    fn test_delete_nonexistent_is_noop() {
+        let (store, _dir) = temp_store();
+        let config = ConnectionConfig::new("exists", "localhost", 6379);
+        store.add(config).unwrap();
+
+        let fake_id = uuid::Uuid::new_v4();
+        let result = store.delete(fake_id);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("connection not found"));
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].name, "exists");
+    }
+
+    #[test]
+    fn test_multiple_connections_order_preserved() {
+        let (store, _dir) = temp_store();
+        let names = ["alpha", "beta", "gamma", "delta"];
+        for name in &names {
+            store
+                .add(ConnectionConfig::new(*name, "localhost", 6379))
+                .unwrap();
+        }
+
+        let loaded = store.load().unwrap();
+        assert_eq!(loaded.len(), 4);
+        for (i, name) in names.iter().enumerate() {
+            assert_eq!(loaded[i].name, *name);
+        }
+    }
 }

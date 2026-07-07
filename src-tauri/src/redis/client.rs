@@ -178,20 +178,53 @@ mod tests {
     #[test]
     fn test_redis_value_status() {
         let val = RedisValue::Status("OK".to_string());
+        assert!(!val.is_nil());
+        assert!(!val.is_error());
         assert_eq!(val.as_str(), Some("OK"));
+        assert_eq!(val.as_i64(), None);
+        assert_eq!(val.as_array(), None);
         assert_eq!(val.to_display_string(), "OK");
     }
 
     #[test]
     fn test_redis_value_float() {
         let val = RedisValue::Float(3.14);
+        assert!(!val.is_nil());
+        assert!(!val.is_error());
+        assert_eq!(val.as_str(), None);
+        assert_eq!(val.as_i64(), None);
+        assert_eq!(val.as_array(), None);
         assert_eq!(val.to_display_string(), "3.14");
     }
 
     #[test]
     fn test_redis_value_bool() {
         let val = RedisValue::Bool(true);
+        assert!(!val.is_nil());
+        assert!(!val.is_error());
+        assert_eq!(val.as_str(), None);
+        assert_eq!(val.as_i64(), None);
+        assert_eq!(val.as_array(), None);
         assert_eq!(val.to_display_string(), "true");
+
+        let val_false = RedisValue::Bool(false);
+        assert_eq!(val_false.to_display_string(), "false");
+    }
+
+    #[test]
+    fn test_redis_value_to_display_string() {
+        assert_eq!(RedisValue::Nil.to_display_string(), "(nil)");
+        assert_eq!(RedisValue::String("".to_string()).to_display_string(), "\"\"");
+        assert_eq!(RedisValue::Integer(-1).to_display_string(), "-1");
+        assert_eq!(RedisValue::Float(0.0).to_display_string(), "0");
+        assert_eq!(RedisValue::Bool(false).to_display_string(), "false");
+        assert_eq!(RedisValue::Status("PONG".to_string()).to_display_string(), "PONG");
+        assert_eq!(RedisValue::Error("ERR msg".to_string()).to_display_string(), "(error) ERR msg");
+        assert_eq!(RedisValue::Array(vec![]).to_display_string(), "[]");
+        assert_eq!(
+            RedisValue::Array(vec![RedisValue::Nil, RedisValue::Integer(1)]).to_display_string(),
+            "[(nil), 1]"
+        );
     }
 
     #[test]
