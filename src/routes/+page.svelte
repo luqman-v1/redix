@@ -1,34 +1,55 @@
 <script lang="ts">
+  import Layout from "$lib/components/Layout.svelte";
   import ThemeToggle from "$lib/components/ThemeToggle.svelte";
 </script>
 
-<main
-  style:min-height="100vh"
-  style:background-color="var(--color-bg)"
-  style:color="var(--color-fg)"
-  style:display="flex"
-  style:flex-direction="column"
-  style:align-items="center"
-  style:padding-top="10vh"
->
-  <header
+{#snippet sidebar()}
+  <div
+    style:padding="1rem"
+    style:display="flex"
+    style:flex-direction="column"
+    style:gap="0.75rem"
+    style:height="100%"
+  >
+    <div
+      style:display="flex"
+      style:align-items="center"
+      style:justify-content="space-between"
+    >
+      <h2 style:font-size="1rem" style:font-weight="600" style:color="var(--color-fg)" style:margin="0">
+        Connections
+      </h2>
+      <ThemeToggle />
+    </div>
+    <p style:color="var(--color-muted)" style:margin="0" style:font-size="0.875rem">
+      No connections yet
+    </p>
+  </div>
+{/snippet}
+
+{#snippet main()}
+  <div
     style:display="flex"
     style:align-items="center"
-    style:gap="1rem"
-    style:margin-bottom="0.5rem"
+    style:justify-content="center"
+    style:height="100%"
+    style:color="var(--color-muted)"
   >
-    <h1
-      style:font-size="2rem"
-      style:font-weight="700"
-      style:color="var(--color-accent)"
-      style:margin="0"
-    >
-      Redix
-    </h1>
-    <ThemeToggle />
-  </header>
+    Select a connection to browse keys
+  </div>
+{/snippet}
 
-  <p style:color="var(--color-muted)" style:margin="0">
-    Redis GUI Client
-  </p>
-</main>
+{#snippet bottom()}
+  <div
+    style:padding="0.75rem 1rem"
+    style:height="100%"
+    style:display="flex"
+    style:align-items="center"
+    style:color="var(--color-muted)"
+    style:font-size="0.875rem"
+  >
+    Command console
+  </div>
+{/snippet}
+
+<Layout {sidebar} {main} {bottom} />
