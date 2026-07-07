@@ -13,6 +13,7 @@
   }
 
   let entries = $state<ConsoleEntry[]>([]);
+  const MAX_ENTRIES = 100;
   let input = $state("");
   let loading = $state(false);
   let historyIndex = $state(-1);
@@ -51,27 +52,23 @@
       }>("execute_command", { connectionId, command: trimmed });
 
       const isError = response.result.type === "error";
-      entries = [
-        ...entries,
-        {
-          command: trimmed,
-          result: response.result.value,
-          duration: response.duration_ms,
-          isError,
-        },
-      ];
+      const newEntry = {
+        command: trimmed,
+        result: response.result.value,
+        duration: response.duration_ms,
+        isError,
+      };
+      entries = [...entries, newEntry].slice(-MAX_ENTRIES);
 
       await history.add(connectionId, trimmed);
     } catch (e) {
-      entries = [
-        ...entries,
-        {
-          command: trimmed,
-          result: String(e),
-          duration: 0,
-          isError: true,
-        },
-      ];
+      const errEntry = {
+        command: trimmed,
+        result: String(e),
+        duration: 0,
+        isError: true,
+      };
+      entries = [...entries, errEntry].slice(-MAX_ENTRIES);
     } finally {
       loading = false;
       scrollToBottom();

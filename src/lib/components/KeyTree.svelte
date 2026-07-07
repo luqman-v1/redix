@@ -12,17 +12,34 @@
 
   let { connectionId, separator, onselect }: Props = $props();
 
+  const PAGE_SIZE = 500;
+
   let pattern = $state("*");
   let loading = $state(false);
+  let allKeys = $state<string[]>([]);
+  let displayedCount = $state(0);
   let tree = $state<TreeNode[]>([]);
   let keyCount = $state(0);
   let error = $state<string | null>(null);
+
+  function updateTree() {
+    const slice = allKeys.slice(0, displayedCount);
+    keyCount = allKeys.length;
+    tree = buildTree(slice, separator);
+  }
+
+  function loadMore() {
+    displayedCount = Math.min(displayedCount + PAGE_SIZE, allKeys.length);
+    updateTree();
+  }
 
   async function scanKeys() {
     loading = true;
     error = null;
     tree = [];
+    allKeys = [];
     keyCount = 0;
+    displayedCount = 0;
 
     try {
       const keys: string[] = [];
@@ -42,8 +59,9 @@
         keys.push(...result.keys);
       } while (cursor !== "0");
 
-      keyCount = keys.length;
-      tree = buildTree(keys, separator);
+      allKeys = keys;
+      displayedCount = Math.min(PAGE_SIZE, keys.length);
+      updateTree();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
@@ -90,7 +108,14 @@
         {/each}
       </div>
       {#if keyCount > 0}
-        <div class="key-count">{keyCount} keys</div>
+        <div class="key-count">
+          Showing {displayedCount} of {keyCount} keys
+        </div>
+        {#if displayedCount < allKeys.length}
+          <button class="load-more-btn" onclick={loadMore}>
+            Load more... ({allKeys.length - displayedCount} remaining)
+          </button>
+        {/if}
       {/if}
     {/if}
   </div>
@@ -171,5 +196,22 @@
     padding: 0.5rem 0.5rem 0;
     border-top: 1px solid var(--color-border, #333);
     margin-top: 0.5rem;
+  }
+
+  .load-more-btn {
+    margin: 0.375rem 0.5rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--color-border, #333);
+    border-radius: 4px;
+    background: var(--color-input-bg, #1a1a1a);
+    color: var(--color-accent, #5b8def);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-family: inherit;
+    text-align: center;
+  }
+
+  .load-more-btn:hover {
+    background: var(--color-border, #333);
   }
 </style>
