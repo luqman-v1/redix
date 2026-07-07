@@ -41,6 +41,7 @@ pub fn run() {
             commands::values::get_stream_range,
             commands::values::get_hyperloglog_count,
             commands::values::get_geo_members,
+            commands::console::execute_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
