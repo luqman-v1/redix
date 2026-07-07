@@ -1,79 +1,51 @@
 use async_trait::async_trait;
-use redis::{aio::MultiplexedConnection, Client, FromRedisValue, Value};
+use redis::cluster_async::ClusterConnection;
+use redis::{cluster::ClusterClient as RedisClusterClient, FromRedisValue, Value};
 
 use crate::config::ConnectionConfig;
 
 use super::client::{RedisClient, RedisValue};
+use super::standalone::{convert_value, redis_value_to_string};
 
-/// Standalone Redis client backed by a multiplexed connection.
-pub struct StandaloneClient {
+/// Redis Cluster client backed by a cluster connection.
+pub struct ClusterClient {
     config: ConnectionConfig,
-    conn: Option<MultiplexedConnection>,
+    conn: Option<ClusterConnection>,
 }
 
-impl StandaloneClient {
+impl ClusterClient {
     pub fn new(config: ConnectionConfig) -> Self {
         Self { config, conn: None }
     }
-}
 
-fn build_url(config: &ConnectionConfig) -> String {
-    let mut url = String::from("redis://");
+    fn build_urls(&self) -> Vec<String> {
+        let mut url = String::from("redis://");
 
-    match (&config.username, &config.password) {
-        (Some(user), Some(pass)) => {
-            url.push_str(&format!("{}:{}@", user, pass));
+        match (&self.config.username, &self.config.password) {
+            (Some(user), Some(pass)) => {
+                url.push_str(&format!("{}:{}@", user, pass));
+            }
+            (None, Some(pass)) => {
+                url.push_str(&format!(":{}@", pass));
+            }
+            _ => {}
         }
-        (None, Some(pass)) => {
-            url.push_str(&format!(":{}@", pass));
-        }
-        _ => {}
-    }
 
-    url.push_str(&format!("{}:{}/{}", config.host, config.port, config.db));
-    url
-}
-
-pub fn convert_value(value: Value) -> RedisValue {
-    match value {
-        Value::Nil => RedisValue::Nil,
-        Value::Int(n) => RedisValue::Integer(n),
-        Value::Array(items) => {
-            let converted: Vec<RedisValue> = items.into_iter().map(convert_value).collect();
-            RedisValue::Array(converted)
-        }
-        Value::BulkString(bytes) => match String::from_utf8(bytes) {
-            Ok(s) => RedisValue::String(s),
-            Err(e) => RedisValue::Error(format!("invalid utf-8: {}", e)),
-        },
-        Value::SimpleString(s) => RedisValue::Status(s),
-        Value::Okay => RedisValue::Status("OK".to_string()),
-        Value::Double(f) => RedisValue::Float(f),
-        Value::Boolean(b) => RedisValue::Bool(b),
-        other => RedisValue::String(format!("{:?}", other)),
-    }
-}
-
-pub fn redis_value_to_string(val: Value) -> Result<String, String> {
-    match val {
-        Value::BulkString(bytes) => String::from_utf8(bytes)
-            .map_err(|e| format!("invalid utf-8: {}", e)),
-        Value::SimpleString(s) => Ok(s),
-        Value::Okay => Ok("OK".to_string()),
-        Value::Int(n) => Ok(n.to_string()),
-        _ => Err(format!("unexpected redis response type: {:?}", val)),
+        url.push_str(&format!("{}:{}", self.config.host, self.config.port));
+        vec![url]
     }
 }
 
 #[async_trait]
-impl RedisClient for StandaloneClient {
+impl RedisClient for ClusterClient {
     async fn connect(&mut self) -> Result<(), String> {
-        let url = build_url(&self.config);
-        let client = Client::open(url).map_err(|e| format!("client creation failed: {}", e))?;
+        let urls = self.build_urls();
+        let client = RedisClusterClient::new(urls)
+            .map_err(|e| format!("cluster client creation failed: {}", e))?;
         let conn = client
-            .get_multiplexed_tokio_connection()
+            .get_async_connection()
             .await
-            .map_err(|e| format!("connection failed: {}", e))?;
+            .map_err(|e| format!("cluster connection failed: {}", e))?;
         self.conn = Some(conn);
         Ok(())
     }
@@ -216,5 +188,42 @@ impl RedisClient for StandaloneClient {
             .await
             .map_err(|e| format!("PERSIST failed: {}", e))?;
         Ok(result == 1)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ConnectionType;
+
+    #[test]
+    fn test_cluster_client_new() {
+        let mut config = ConnectionConfig::new("cluster-test", "127.0.0.1", 7000);
+        config.connection_type = ConnectionType::Cluster;
+        let client = ClusterClient::new(config.clone());
+        assert!(client.conn.is_none());
+        assert_eq!(client.config.name, "cluster-test");
+        assert_eq!(client.config.host, "127.0.0.1");
+        assert_eq!(client.config.port, 7000);
+    }
+
+    #[test]
+    fn test_cluster_client_build_urls() {
+        let mut config = ConnectionConfig::new("cluster-test", "10.0.0.1", 7001);
+        config.connection_type = ConnectionType::Cluster;
+        let client = ClusterClient::new(config);
+        let urls = client.build_urls();
+        assert_eq!(urls, vec!["redis://10.0.0.1:7001"]);
+    }
+
+    #[test]
+    fn test_cluster_client_build_urls_with_auth() {
+        let mut config = ConnectionConfig::new("cluster-auth", "10.0.0.1", 7001);
+        config.connection_type = ConnectionType::Cluster;
+        config.username = Some("admin".to_string());
+        config.password = Some("secret".to_string());
+        let client = ClusterClient::new(config);
+        let urls = client.build_urls();
+        assert_eq!(urls, vec!["redis://admin:secret@10.0.0.1:7001"]);
     }
 }
