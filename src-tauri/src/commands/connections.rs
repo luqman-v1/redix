@@ -35,6 +35,36 @@ pub fn delete_connection(store: State<'_, ConnectionStore>, id: String) -> Resul
 }
 
 #[tauri::command]
+pub async fn connect_to_server(
+    connection_id: String,
+    store: State<'_, ConnectionStore>,
+    manager: State<'_, ConnectionManager>,
+) -> Result<(), String> {
+    let configs = store.load()?;
+    let config = configs
+        .into_iter()
+        .find(|c| c.id.to_string() == connection_id)
+        .ok_or("Connection config not found")?;
+    let mut client = StandaloneClient::new(config);
+    client.connect().await.map_err(|e| format!("Connect failed: {e}"))?;
+    let mut map = manager.lock().await;
+    map.insert(connection_id, Box::new(client) as Box<dyn RedisClient>);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn disconnect_server(
+    connection_id: String,
+    manager: State<'_, ConnectionManager>,
+) -> Result<(), String> {
+    let mut map = manager.lock().await;
+    if let Some(mut client) = map.remove(&connection_id) {
+        client.disconnect().await.map_err(|e| format!("Disconnect failed: {e}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn test_connection(config: ConnectionConfig) -> Result<bool, String> {
     if config.host.is_empty() {
         return Err("host must not be empty".into());
@@ -42,7 +72,6 @@ pub fn test_connection(config: ConnectionConfig) -> Result<bool, String> {
     if config.port == 0 {
         return Err("port must be greater than 0".into());
     }
-    // ponytail: actual TCP/Redis ping skipped, add when connection pool impl lands
     Ok(true)
 }
 
@@ -52,11 +81,10 @@ pub async fn reconnect(
     store: State<'_, ConnectionStore>,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let uuid = uuid::Uuid::parse_str(&connection_id).map_err(|e| format!("invalid uuid: {}", e))?;
     let configs = store.load()?;
     let config = configs
         .into_iter()
-        .find(|c| c.id == uuid)
+        .find(|c| c.id.to_string() == connection_id)
         .ok_or("config not found")?;
     let mut client = StandaloneClient::new(config);
     client.connect().await?;

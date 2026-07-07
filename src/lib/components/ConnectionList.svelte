@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ConnectionConfig } from "$lib/types/connection";
-  import { connections, activeConnection } from "$lib/stores/connections";
+  import { connections, activeConnection, connectToServer } from "$lib/stores/connections";
   import ConnectionForm from "./ConnectionForm.svelte";
 
   let showForm = $state(false);
@@ -33,8 +33,8 @@
     if (active?.id === conn.id) activeConnection.set(null);
   }
 
-  function selectActive(conn: ConnectionConfig) {
-    activeConnection.set(conn);
+  async function selectActive(conn: ConnectionConfig) {
+    await connectToServer(conn);
   }
 </script>
 

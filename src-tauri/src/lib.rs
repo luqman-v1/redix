@@ -20,6 +20,8 @@ pub fn run() {
             commands::connections::delete_connection,
             commands::connections::test_connection,
             commands::connections::reconnect,
+            commands::connections::connect_to_server,
+            commands::connections::disconnect_server,
             commands::keys::scan_keys,
             commands::keys::get_key_type,
             commands::keys::get_key_ttl,

@@ -35,6 +35,18 @@ function createConnectionStore() {
 
 export const connections = createConnectionStore();
 export const activeConnection = writable<ConnectionConfig | null>(null);
+export const connectedId = writable<string | null>(null);
+
+export async function connectToServer(config: ConnectionConfig): Promise<void> {
+  await invoke("connect_to_server", { connectionId: config.id });
+  activeConnection.set(config);
+  connectedId.set(config.id);
+}
+
+export async function disconnectFromServer(connectionId: string): Promise<void> {
+  await invoke("disconnect_server", { connectionId });
+  connectedId.set(null);
+}
 
 export async function withReconnect<T>(connId: string, fn: () => Promise<T>): Promise<T> {
   try {
