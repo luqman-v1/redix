@@ -7,6 +7,8 @@
   import KeyTree from "$lib/components/KeyTree.svelte";
   import Console from "$lib/components/Console.svelte";
   import { connections, activeConnection } from "$lib/stores/connections";
+  import { theme } from "$lib/stores/theme";
+  import { registerShortcuts } from "$lib/utils/shortcuts";
   import type { ConnectionConfig } from "$lib/types/connection";
 
   let active = $state<ConnectionConfig | null>(null);
@@ -14,6 +16,39 @@
 
   onMount(() => {
     connections.load();
+
+    const cleanup = registerShortcuts([
+      {
+        key: "t",
+        ctrl: true,
+        action: () => theme.toggle(),
+        description: "Toggle theme",
+      },
+      {
+        key: "k",
+        ctrl: true,
+        action: () => {
+          const input = document.querySelector<HTMLInputElement>(
+            "[data-console-input]",
+          );
+          input?.focus();
+        },
+        description: "Focus console input",
+      },
+      {
+        key: "f",
+        ctrl: true,
+        action: () => {
+          const input = document.querySelector<HTMLInputElement>(
+            "[data-key-search]",
+          );
+          input?.focus();
+        },
+        description: "Focus key search",
+      },
+    ]);
+
+    return cleanup;
   });
 
   function handleKeySelect(key: string) {

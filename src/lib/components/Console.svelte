@@ -138,6 +138,7 @@
   <div class="input-area">
     <span class="prompt-icon">&gt;</span>
     <textarea
+      data-console-input
       bind:this={inputEl}
       bind:value={input}
       onkeydown={handleKeydown}
