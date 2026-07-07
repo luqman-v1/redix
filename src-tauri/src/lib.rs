@@ -12,6 +12,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(config::ConnectionStore::default())
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::keys::ConnectionManager)
+        .manage(Arc::new(Mutex::new(HashMap::new())) as commands::history::HistoryStore)
         .invoke_handler(tauri::generate_handler![
             commands::connections::get_connections,
             commands::connections::add_connection,
@@ -42,6 +43,8 @@ pub fn run() {
             commands::values::get_hyperloglog_count,
             commands::values::get_geo_members,
             commands::console::execute_command,
+            commands::history::get_history,
+            commands::history::add_to_history,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
