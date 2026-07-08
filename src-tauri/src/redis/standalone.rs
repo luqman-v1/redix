@@ -18,7 +18,8 @@ impl StandaloneClient {
 }
 
 fn build_url(config: &ConnectionConfig) -> String {
-    let mut url = String::from("redis://");
+    let scheme = if config.use_ssl { "rediss://" } else { "redis://" };
+    let mut url = String::from(scheme);
 
     match (&config.username, &config.password) {
         (Some(user), Some(pass)) => {
@@ -94,6 +95,13 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String> {
+        if self.config.readonly {
+            let upper_cmd = cmd.to_uppercase();
+            let unsafe_cmds = ["SET", "DEL", "HSET", "RPUSH", "LPUSH", "SADD", "ZADD", "FLUSHALL", "FLUSHDB", "RENAME", "EXPIRE", "CONFIG"];
+            if unsafe_cmds.contains(&upper_cmd.as_str()) {
+                return Err("Connection is in Read-Only mode".into());
+            }
+        }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut redis_cmd = redis::cmd(cmd);
@@ -170,6 +178,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn del(&self, keys: Vec<&str>) -> Result<i64, String> {
+        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut cmd = redis::cmd("DEL");
@@ -184,6 +193,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn rename(&self, old: &str, new: &str) -> Result<(), String> {
+        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let _: Value = redis::cmd("RENAME")
@@ -196,6 +206,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn set_ttl(&self, key: &str, seconds: u64) -> Result<bool, String> {
+        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("EXPIRE")
@@ -208,6 +219,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn persist(&self, key: &str) -> Result<bool, String> {
+        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("PERSIST")

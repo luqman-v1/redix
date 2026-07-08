@@ -19,7 +19,8 @@ impl ClusterClient {
     }
 
     fn build_urls(&self) -> Vec<String> {
-        let mut url = String::from("redis://");
+        let scheme = if self.config.use_ssl { "rediss://" } else { "redis://" };
+        let mut url = String::from(scheme);
 
         match (&self.config.username, &self.config.password) {
             (Some(user), Some(pass)) => {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { exportCsv } from "$lib/utils/csv";
 
   interface Props {
     connectionId: string;
@@ -68,6 +69,14 @@
       <button class="btn" onclick={() => pushItem("right")} disabled={pushing || !pushValue.trim()}>
         Push Tail
       </button>
+      <button 
+        class="btn btn-secondary" 
+        style="margin-left: auto;"
+        onclick={() => exportCsv(`${key.split(':').pop()}_list`, ['Index', 'Value'], items.map((item, i) => [String(i), item]))}
+        title="Export to CSV"
+      >
+        &#128190; Export CSV
+      </button>
       <span class="count">{items.length} items</span>
     </div>
 
@@ -102,19 +111,19 @@
     flex-direction: column;
     gap: 0.5rem;
     min-height: 0;
-    padding: 0.75rem;
+    padding: 0.375rem 0.625rem;
   }
 
   .state-msg {
     color: var(--color-muted, #888);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     text-align: center;
     padding: 1rem 0;
   }
 
   .error {
     color: var(--color-error, #e55);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     padding: 0.25rem 0;
   }
 
@@ -131,7 +140,7 @@
     border-radius: 4px;
     background: var(--color-input-bg, #1a1a1a);
     color: var(--color-fg);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     outline: none;
   }
 
@@ -140,7 +149,7 @@
   }
 
   .btn {
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0.625rem;
     border: 1px solid var(--color-border, #333);
     border-radius: 4px;
     background: var(--color-input-bg, #1a1a1a);
@@ -165,17 +174,21 @@
     overflow: auto;
     flex: 1;
     min-height: 0;
+    background: color-mix(in srgb, var(--color-surface) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
   }
 
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
   }
 
   .data-table th {
     text-align: left;
-    padding: 0.375rem 0.5rem;
+    padding: 0.375rem 0.625rem;
     border-bottom: 1px solid var(--color-border, #333);
     color: var(--color-muted, #888);
     font-weight: 600;
@@ -188,14 +201,22 @@
   }
 
   .data-table td {
-    padding: 0.25rem 0.5rem;
+    padding: 0.375rem 0.625rem;
     border-bottom: 1px solid var(--color-border, #333);
     vertical-align: top;
   }
 
+  .data-table tbody tr {
+    transition: background-color 0.15s;
+  }
+
+  .data-table tbody tr:hover {
+    background-color: var(--color-surface, #222);
+  }
+
   .data-table code {
-    font-family: monospace;
-    font-size: 0.8125rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.75rem;
     word-break: break-all;
   }
 

@@ -43,3 +43,10 @@
 - T26: Integration Tests ✅ (3 tests, #[ignore])
 - T27: Performance Optimization ✅
 - T28: E2E Smoke Tests ✅
+
+## Phase 8: Release & Extras ✅ (Latest)
+- T29: GitHub Actions CI/CD Pipeline ✅
+- T30: CSV Export Permissions & Implementation ✅
+- T31: App Icon Design & UI Rebranding ✅
+- T32: Light Mode UI / UX Refinements ✅
+- T33: File Cleanup & Documentation (README) ✅

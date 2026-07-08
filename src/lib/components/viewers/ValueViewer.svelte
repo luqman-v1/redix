@@ -55,7 +55,7 @@
 
   .unsupported {
     color: var(--color-muted, #888);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     padding: 1rem 0.75rem;
     text-align: center;
   }

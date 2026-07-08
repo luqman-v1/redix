@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { exportCsv } from "$lib/utils/csv";
 
   interface Props {
     connectionId: string;
@@ -81,6 +82,14 @@
         bind:value={filter}
         placeholder="Filter members..."
       />
+      <button 
+        class="btn btn-secondary" 
+        style="margin-left: auto;"
+        onclick={() => exportCsv(`${key.split(':').pop()}_set`, ['Member'], filtered.map(m => [m]))}
+        title="Export to CSV"
+      >
+        &#128190; Export CSV
+      </button>
       <span class="count">{filtered.length} / {members.length}</span>
     </div>
 
@@ -220,13 +229,17 @@
   .member-list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 0.5rem;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
+    background: color-mix(in srgb, var(--color-surface) 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
   }
 
   .member-item {

@@ -6,10 +6,12 @@
     sidebar,
     main,
     bottom,
+    showBottom = false,
   }: {
     sidebar: Snippet;
     main: Snippet;
     bottom: Snippet;
+    showBottom?: boolean;
   } = $props();
 </script>
 
@@ -23,14 +25,16 @@
   style:overflow="hidden"
 >
   <div style:display="flex" style:flex-direction="row" style:flex="1" style:min-height="0">
-    <Panel initialSize={260} minSize={180} maxSize={400} direction="horizontal">
+    <Panel initialSize={320} minSize={240} maxSize={500} direction="horizontal">
       {@render sidebar()}
     </Panel>
-    <div style:flex="1" style:overflow="auto" style:min-width="0">
+    <div style:flex="1" style:overflow="hidden" style:min-width="0" style:display="flex" style:flex-direction="column">
       {@render main()}
     </div>
   </div>
-  <Panel initialSize={200} minSize={100} maxSize={500} direction="vertical">
-    {@render bottom()}
-  </Panel>
+  {#if showBottom}
+    <Panel initialSize={200} minSize={100} maxSize={500} direction="vertical">
+      {@render bottom()}
+    </Panel>
+  {/if}
 </div>

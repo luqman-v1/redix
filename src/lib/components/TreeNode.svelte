@@ -48,7 +48,7 @@
     border: none;
     background: none;
     color: var(--color-fg);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-family: inherit;
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
@@ -57,6 +57,8 @@
     text-align: left;
     border-radius: 4px;
     white-space: nowrap;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   .tree-item:hover {
@@ -73,7 +75,7 @@
 
   .icon {
     flex-shrink: 0;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   .name {

@@ -1,7 +1,7 @@
 {
-  "name": "redix-app",
+  "name": "redix",
   "version": "0.1.0",
-  "description": "",
+  "description": "The next-generation Redis GUI for power users.",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -15,6 +15,8 @@
   "license": "MIT",
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-opener": "^2"
   },
   "devDependencies": {

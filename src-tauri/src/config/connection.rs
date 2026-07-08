@@ -20,7 +20,7 @@ impl Default for ConnectionType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SshAuth {
-    KeyFile(String),
+    KeyFile { path: String, passphrase: Option<String> },
     Password(String),
 }
 
@@ -78,6 +78,16 @@ pub struct ConnectionConfig {
     pub ssl: Option<SslConfig>,
     #[serde(default)]
     pub readonly: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+    #[serde(default)]
+    pub use_ssl: bool,
+    #[serde(default = "default_timeout")]
+    pub timeout: u64,
+}
+
+fn default_timeout() -> u64 {
+    30
 }
 
 fn default_port() -> u16 {
@@ -103,6 +113,9 @@ impl ConnectionConfig {
             ssh: None,
             ssl: None,
             readonly: false,
+            folder: None,
+            use_ssl: false,
+            timeout: 30,
         }
     }
 }

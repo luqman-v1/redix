@@ -5,10 +5,23 @@ pub mod redis;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use once_cell::sync::OnceCell;
+use tauri::Manager;
+
+pub static APP_HANDLE: OnceCell<tauri::AppHandle> = OnceCell::new();
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .init();
+
     tauri::Builder::default()
+        .setup(|app| {
+            APP_HANDLE.set(app.handle().clone()).unwrap();
+            Ok(())
+        })
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .manage(config::ConnectionStore::default())
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::keys::ConnectionManager)
@@ -22,9 +35,11 @@ pub fn run() {
             commands::connections::reconnect,
             commands::connections::connect_to_server,
             commands::connections::disconnect_server,
+            commands::connections::get_server_info,
             commands::keys::scan_keys,
             commands::keys::get_key_type,
             commands::keys::get_key_ttl,
+            commands::keys::set_key_ttl,
             commands::keys::delete_key,
             commands::keys::rename_key,
             commands::values::get_string_value,

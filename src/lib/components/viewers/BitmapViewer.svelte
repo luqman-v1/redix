@@ -59,14 +59,14 @@
 
   .state-msg {
     color: var(--color-muted, #888);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     text-align: center;
     padding: 1rem 0;
   }
 
   .error {
     color: var(--color-error, #e55);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     padding: 0.25rem 0;
   }
 
@@ -87,7 +87,7 @@
     border-radius: 4px;
     padding: 0.75rem;
     overflow: auto;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     line-height: 1.6;
     color: var(--color-fg);
     margin: 0;

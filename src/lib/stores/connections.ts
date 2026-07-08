@@ -4,7 +4,7 @@ import type { ConnectionConfig } from "$lib/types/connection";
 import { toasts } from "./toasts";
 
 function createConnectionStore() {
-  const { subscribe, set, update } = writable<ConnectionConfig[]>([]);
+  const { subscribe, set, update: _update } = writable<ConnectionConfig[]>([]);
 
   return {
     subscribe,
@@ -18,17 +18,17 @@ function createConnectionStore() {
         id: crypto.randomUUID(),
       };
       const created = await invoke<ConnectionConfig>("add_connection", { config: withId });
-      update((list) => [...list, created]);
+      _update((list) => [...list, created]);
       return created;
     },
-    async update(config: ConnectionConfig) {
+    async save(config: ConnectionConfig) {
       const updated = await invoke<ConnectionConfig>("update_connection", { config });
-      update((list) => list.map((c) => (c.id === updated.id ? updated : c)));
+      _update((list) => list.map((c) => (c.id === updated.id ? updated : c)));
       return updated;
     },
     async remove(id: string) {
       await invoke("delete_connection", { id });
-      update((list) => list.filter((c) => c.id !== id));
+      _update((list) => list.filter((c) => c.id !== id));
     },
   };
 }

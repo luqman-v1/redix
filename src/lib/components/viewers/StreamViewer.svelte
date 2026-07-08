@@ -99,19 +99,19 @@
     flex-direction: column;
     gap: 0.5rem;
     min-height: 0;
-    padding: 0.75rem;
+    padding: 0.375rem 0.625rem;
   }
 
   .state-msg {
     color: var(--color-muted, #888);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     text-align: center;
     padding: 1rem 0;
   }
 
   .error {
     color: var(--color-error, #e55);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     padding: 0.25rem 0;
   }
 
@@ -147,12 +147,12 @@
     align-items: center;
     gap: 0.5rem;
     width: 100%;
-    padding: 0.375rem 0.5rem;
+    padding: 0.375rem 0.625rem;
     border: none;
     background: none;
     color: var(--color-fg);
     cursor: pointer;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     text-align: left;
   }
 
@@ -186,7 +186,7 @@
     width: 100%;
     border-collapse: collapse;
     border-top: 1px solid var(--color-border, #333);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
   }
 
   .field-table td {
@@ -195,8 +195,12 @@
     vertical-align: top;
   }
 
+  .field-table tbody tr:hover {
+    background: var(--color-surface, #2a2a2a);
+  }
+
   .field-table code {
-    font-family: monospace;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     font-size: 0.75rem;
     word-break: break-all;
   }

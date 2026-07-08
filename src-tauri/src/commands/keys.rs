@@ -86,3 +86,22 @@ pub async fn rename_key(
         .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
     client.rename(&old_name, &new_name).await
 }
+
+#[tauri::command]
+pub async fn set_key_ttl(
+    connection_id: String,
+    key: String,
+    ttl: i64,
+    manager: tauri::State<'_, ConnectionManager>,
+) -> Result<(), String> {
+    let map = manager.lock().await;
+    let client = map
+        .get(&connection_id)
+        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    
+    if ttl <= 0 {
+        client.persist(&key).await.map(|_| ())
+    } else {
+        client.set_ttl(&key, ttl as u64).await.map(|_| ())
+    }
+}

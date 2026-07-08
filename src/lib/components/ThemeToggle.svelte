@@ -4,6 +4,7 @@
 
 <button
   aria-label="Toggle theme"
+  title="Toggle Theme (Ctrl+T)"
   onclick={() => theme.toggle()}
   style:background-color="var(--color-surface)"
   style:border="1px solid var(--color-border)"

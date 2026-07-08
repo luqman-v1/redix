@@ -27,10 +27,10 @@ impl SshTunnel {
             .map_err(|e| format!("SSH handshake failed: {}", e))?;
 
         match &config.auth {
-            SshAuth::KeyFile(path) => {
+            SshAuth::KeyFile { path, passphrase } => {
                 let key_path = std::path::Path::new(path);
                 session
-                    .userauth_pubkey_file(&config.username, None, key_path, None)
+                    .userauth_pubkey_file(&config.username, None, key_path, passphrase.as_deref())
                     .map_err(|e| format!("SSH key auth failed: {}", e))?;
             }
             SshAuth::Password(password) => {
@@ -82,14 +82,14 @@ mod tests {
             host: "bastion.example.com".to_string(),
             port: 22,
             username: "admin".to_string(),
-            auth: SshAuth::KeyFile("/home/admin/.ssh/id_rsa".to_string()),
+            auth: SshAuth::KeyFile { path: "/home/admin/.ssh/id_rsa".to_string(), passphrase: None },
         };
 
         assert_eq!(config.host, "bastion.example.com");
         assert_eq!(config.port, 22);
         assert_eq!(config.username, "admin");
         match &config.auth {
-            SshAuth::KeyFile(path) => assert_eq!(path, "/home/admin/.ssh/id_rsa"),
+            SshAuth::KeyFile { path, passphrase: _ } => assert_eq!(path, "/home/admin/.ssh/id_rsa"),
             _ => panic!("expected KeyFile auth"),
         }
     }

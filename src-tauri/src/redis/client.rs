@@ -112,6 +112,104 @@ pub trait RedisClient: Send + Sync {
     async fn persist(&self, key: &str) -> Result<bool, String>;
 }
 
+/// A wrapper client that logs all command executions
+pub struct LoggingClient {
+    pub inner: Box<dyn RedisClient>,
+}
+
+#[async_trait]
+impl RedisClient for LoggingClient {
+    async fn connect(&mut self) -> Result<(), String> {
+        self.inner.connect().await
+    }
+
+    async fn disconnect(&mut self) -> Result<(), String> {
+        self.inner.disconnect().await
+    }
+
+    async fn ping(&self) -> Result<bool, String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.ping().await;
+        crate::redis::emit_command_log("PING", start.elapsed().as_millis() as u64);
+        res
+    }
+
+    async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.execute(cmd, args.clone()).await;
+        let duration = start.elapsed().as_millis() as u64;
+        
+        let args_str = args.join(" ");
+        let full_cmd = if args_str.is_empty() {
+            cmd.to_string()
+        } else {
+            format!("{} {}", cmd, args_str)
+        };
+        crate::redis::emit_command_log(&full_cmd, duration);
+        res
+    }
+
+    async fn scan_keys(
+        &self,
+        cursor: u64,
+        count: u64,
+        pattern: Option<&str>,
+    ) -> Result<(u64, Vec<String>), String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.scan_keys(cursor, count, pattern).await;
+        let duration = start.elapsed().as_millis() as u64;
+        
+        let mut full_cmd = format!("SCAN {} COUNT {}", cursor, count);
+        if let Some(p) = pattern {
+            full_cmd.push_str(&format!(" MATCH {}", p));
+        }
+        crate::redis::emit_command_log(&full_cmd, duration);
+        res
+    }
+
+    async fn get_type(&self, key: &str) -> Result<String, String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.get_type(key).await;
+        crate::redis::emit_command_log(&format!("TYPE {}", key), start.elapsed().as_millis() as u64);
+        res
+    }
+
+    async fn get_ttl(&self, key: &str) -> Result<i64, String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.get_ttl(key).await;
+        crate::redis::emit_command_log(&format!("TTL {}", key), start.elapsed().as_millis() as u64);
+        res
+    }
+
+    async fn del(&self, keys: Vec<&str>) -> Result<i64, String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.del(keys.clone()).await;
+        crate::redis::emit_command_log(&format!("DEL {}", keys.join(" ")), start.elapsed().as_millis() as u64);
+        res
+    }
+
+    async fn rename(&self, old: &str, new: &str) -> Result<(), String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.rename(old, new).await;
+        crate::redis::emit_command_log(&format!("RENAME {} {}", old, new), start.elapsed().as_millis() as u64);
+        res
+    }
+
+    async fn set_ttl(&self, key: &str, seconds: u64) -> Result<bool, String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.set_ttl(key, seconds).await;
+        crate::redis::emit_command_log(&format!("EXPIRE {} {}", key, seconds), start.elapsed().as_millis() as u64);
+        res
+    }
+
+    async fn persist(&self, key: &str) -> Result<bool, String> {
+        let start = std::time::Instant::now();
+        let res = self.inner.persist(key).await;
+        crate::redis::emit_command_log(&format!("PERSIST {}", key), start.elapsed().as_millis() as u64);
+        res
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

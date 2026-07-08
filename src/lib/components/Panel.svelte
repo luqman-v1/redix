@@ -71,19 +71,21 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
-    class="shrink-0 hover:opacity-100 transition-colors"
-    class:w-[6px]={direction === "horizontal"}
-    class:h-[6px]={direction === "vertical"}
-    class:cursor-col-resize={direction === "horizontal"}
-    class:cursor-row-resize={direction === "vertical"}
+    style:flex-shrink="0"
+    style:width={direction === "horizontal" ? "6px" : "100%"}
+    style:height={direction === "vertical" ? "6px" : "100%"}
+    style:cursor={direction === "horizontal" ? "col-resize" : "row-resize"}
     style:background-color="var(--color-border)"
     style:opacity="0.5"
     style:user-select={dragging ? "none" : "auto"}
+    style:transition="opacity 0.15s"
     role="separator"
     tabindex="0"
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
     onkeydown={onKeydown}
+    onpointerenter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; }}
+    onpointerleave={(e) => { if (!dragging) (e.currentTarget as HTMLElement).style.opacity = '0.5'; }}
   ></div>
 </div>

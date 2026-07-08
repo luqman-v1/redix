@@ -18,7 +18,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
+    padding: 0.375rem 0.625rem;
     background: var(--color-surface);
     color: var(--color-fg);
     border-radius: 6px;
@@ -26,7 +26,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     min-width: 280px;
     max-width: 400px;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     animation: slide-in 0.2s ease-out;
   }
 

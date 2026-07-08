@@ -88,14 +88,14 @@
 
   .state-msg {
     color: var(--color-muted, #888);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     text-align: center;
     padding: 1rem 0;
   }
 
   .error {
     color: var(--color-error, #e55);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     padding: 0.25rem 0;
   }
 
@@ -120,7 +120,7 @@
   .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
   }
 
   .data-table th {
@@ -144,15 +144,15 @@
   }
 
   .data-table code {
-    font-family: monospace;
-    font-size: 0.8125rem;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.75rem;
     word-break: break-all;
   }
 
   .col-num {
     text-align: right;
     font-family: monospace;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     width: 110px;
   }
 </style>

@@ -6,8 +6,17 @@ export interface TreeNode {
   count: number;
 }
 
+// ponytail: internal build node uses Record for children so lookups are O(1)
+// and we don't lose children when converting between map/array
+interface BuildNode {
+  name: string;
+  path: string;
+  children: Record<string, BuildNode>;
+  isLeaf: boolean;
+}
+
 export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
-  const root: Record<string, TreeNode> = {};
+  const root: Record<string, BuildNode> = {};
 
   for (const key of keys) {
     const parts = key.split(separator).filter(p => p.length > 0);
@@ -23,38 +32,39 @@ export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
         current[part] = {
           name: part,
           path,
-          children: [],
+          children: {},
           isLeaf,
-          count: 0,
         };
       }
 
       if (isLeaf) {
         current[part].isLeaf = true;
         current[part].path = key;
-      }
-
-      // pivot: if node was leaf but now has children, make it folder
-      if (!isLeaf && current[part].isLeaf) {
+      } else if (current[part].isLeaf) {
+        // was leaf, now has children — make it a folder
         current[part].isLeaf = false;
       }
 
       if (!isLeaf) {
-        // build children index from existing children array
-        const childIndex: Record<string, TreeNode> = {};
-        for (const child of current[part].children) {
-          childIndex[child.name] = child;
-        }
-        current = childIndex;
+        current = current[part].children;
       }
     }
   }
 
-  return sortNodes(Object.values(root));
+  return sortNodes(toTreeNodes(root));
+}
+
+function toTreeNodes(record: Record<string, BuildNode>): TreeNode[] {
+  return Object.values(record).map(node => ({
+    name: node.name,
+    path: node.path,
+    children: toTreeNodes(node.children),
+    isLeaf: node.isLeaf,
+    count: 0,
+  }));
 }
 
 function sortNodes(nodes: TreeNode[]): TreeNode[] {
-  // count leaf descendants, sort children recursively
   for (const node of nodes) {
     node.children = sortNodes(node.children);
     node.count = node.isLeaf

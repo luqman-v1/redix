@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { untrack } from "svelte";
   import { buildTree } from "$lib/utils/tree-builder";
   import type { TreeNode } from "$lib/utils/tree-builder";
   import TreeNodeComponent from "./TreeNode.svelte";
@@ -33,34 +34,46 @@
     updateTree();
   }
 
-  async function scanKeys() {
+  let currentCursor = $state(0);
+
+  async function scanKeys(reset = true) {
+    if (loading) return;
     loading = true;
     error = null;
-    tree = [];
-    allKeys = [];
-    keyCount = 0;
-    displayedCount = 0;
+    
+    if (reset) {
+      tree = [];
+      allKeys = [];
+      keyCount = 0;
+      displayedCount = 0;
+      currentCursor = 0;
+    }
 
     try {
-      const keys: string[] = [];
-      let cursor = 0;
-
+      const newKeys: string[] = [];
+      let c = currentCursor;
+      let iterations = 0;
+      
       do {
+        if (iterations > 0 && c === 0) break;
         const result = await invoke<{ cursor: number; keys: string[] }>(
           "scan_keys",
           {
             connectionId,
-            cursor,
-            count: 500,
+            cursor: c,
+            count: 1000,
             pattern,
           }
         );
-        cursor = result.cursor;
-        keys.push(...result.keys);
-      } while (cursor !== 0);
+        c = result.cursor;
+        newKeys.push(...result.keys);
+        iterations++;
+      } while (newKeys.length < PAGE_SIZE && c !== 0 && iterations < 20);
 
-      allKeys = keys;
-      displayedCount = Math.min(PAGE_SIZE, keys.length);
+      currentCursor = c;
+      const uniqueKeys = Array.from(new Set([...allKeys, ...newKeys]));
+      allKeys = uniqueKeys;
+      displayedCount = allKeys.length;
       updateTree();
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
@@ -72,7 +85,9 @@
   // auto-scan when connectionId changes
   $effect(() => {
     if (connectionId) {
-      scanKeys();
+      untrack(() => {
+        scanKeys();
+      });
     }
   });
 </script>
@@ -85,9 +100,9 @@
       type="text"
       bind:value={pattern}
       placeholder="Filter pattern (e.g. user:*)"
-      onkeydown={(e) => e.key === "Enter" && scanKeys()}
+      onkeydown={(e) => e.key === "Enter" && scanKeys(true)}
     />
-    <button class="refresh-btn" onclick={scanKeys} disabled={loading} title="Refresh">
+    <button class="refresh-btn" onclick={() => scanKeys(true)} disabled={loading} title="Refresh">
       🔄
     </button>
   </div>
@@ -107,13 +122,16 @@
           <TreeNodeComponent {node} depth={0} {onselect} />
         {/each}
       </div>
-      {#if keyCount > 0}
+      {#if keyCount > 0 || currentCursor !== 0}
         <div class="key-count">
-          Showing {displayedCount} of {keyCount} keys
+          Showing {displayedCount} keys
+          {#if currentCursor === 0}
+             (All loaded)
+          {/if}
         </div>
-        {#if displayedCount < allKeys.length}
-          <button class="load-more-btn" onclick={loadMore}>
-            Load more... ({allKeys.length - displayedCount} remaining)
+        {#if currentCursor !== 0}
+          <button class="load-more-btn" onclick={() => scanKeys(false)} disabled={loading}>
+            {loading ? 'Scanning DB...' : 'Scan More Keys'}
           </button>
         {/if}
       {/if}
@@ -138,11 +156,11 @@
   .pattern-input {
     flex: 1;
     padding: 0.375rem 0.5rem;
-    border: 1px solid var(--color-border, #333);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
-    background: var(--color-input-bg, #1a1a1a);
+    background: var(--color-surface-input);
     color: var(--color-fg);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-family: inherit;
     outline: none;
   }
@@ -153,12 +171,12 @@
 
   .refresh-btn {
     padding: 0.375rem 0.5rem;
-    border: 1px solid var(--color-border, #333);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
-    background: var(--color-input-bg, #1a1a1a);
+    background: var(--color-surface-btn);
     color: var(--color-fg);
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
   }
 
   .refresh-btn:disabled {
@@ -168,7 +186,7 @@
 
   .error {
     color: var(--color-error, #e55);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     padding: 0.25rem 0;
   }
 
@@ -185,7 +203,7 @@
 
   .state-msg {
     color: var(--color-muted);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     text-align: center;
     padding: 1rem 0;
   }
@@ -201,17 +219,17 @@
   .load-more-btn {
     margin: 0.375rem 0.5rem;
     padding: 0.375rem 0.75rem;
-    border: 1px solid var(--color-border, #333);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
-    background: var(--color-input-bg, #1a1a1a);
-    color: var(--color-accent, #5b8def);
+    background: var(--color-surface-btn);
+    color: var(--color-accent);
     cursor: pointer;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-family: inherit;
     text-align: center;
   }
 
   .load-more-btn:hover {
-    background: var(--color-border, #333);
+    background: var(--color-surface-btn-hover);
   }
 </style>

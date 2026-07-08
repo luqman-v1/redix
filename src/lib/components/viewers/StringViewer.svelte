@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { beautify } from "$lib/utils/beautifier";
+  import EditModal from "../EditModal.svelte";
+  import { toasts } from "$lib/stores/toasts";
 
   interface Props {
     connectionId: string;
@@ -33,31 +35,39 @@
     }
   }
 
-  async function save() {
+  async function save(newValue: string) {
     saving = true;
     error = null;
     try {
-      await invoke("set_string_value", { connectionId, key, value: editValue });
-      rawValue = editValue;
-      const result = beautify(editValue);
+      await invoke("set_string_value", { connectionId, key, value: newValue });
+      rawValue = newValue;
+      const result = beautify(newValue);
       formatted = result.formatted;
       format = result.format;
       editing = false;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
+      throw e; // throw so the modal stays open if there's an error
     } finally {
       saving = false;
     }
   }
 
   function startEdit() {
-    editValue = rawValue;
     editing = true;
   }
 
   function cancelEdit() {
     editing = false;
-    editValue = "";
+  }
+
+  async function copyValue() {
+    try {
+      await navigator.clipboard.writeText(rawValue);
+      toasts.add("Value copied to clipboard", "success");
+    } catch (e) {
+      toasts.add("Failed to copy value", "error");
+    }
   }
 
   $effect(() => {
@@ -76,26 +86,22 @@
   {:else}
     <div class="toolbar">
       <span class="format-badge" data-format={format}>{format}</span>
+      <button class="btn" onclick={copyValue}>Copy</button>
       {#if !editing}
         <button class="btn" onclick={startEdit}>Edit</button>
       {/if}
     </div>
 
     {#if editing}
-      <textarea
-        class="edit-area"
-        bind:value={editValue}
-        rows="12"
-      ></textarea>
-      <div class="edit-actions">
-        <button class="btn btn-primary" onclick={save} disabled={saving}>
-          {saving ? "Saving..." : "Save"}
-        </button>
-        <button class="btn" onclick={cancelEdit}>Cancel</button>
-      </div>
-    {:else}
-      <pre class="value-block"><code>{formatted}</code></pre>
+      <EditModal
+        title="Edit String Value"
+        initialValue={rawValue}
+        onSave={save}
+        onCancel={cancelEdit}
+      />
     {/if}
+
+    <pre class="value-block"><code>{formatted}</code></pre>
   {/if}
 </div>
 
@@ -105,19 +111,19 @@
     flex-direction: column;
     gap: 0.5rem;
     min-height: 0;
-    padding: 0.75rem;
+    padding: 0.375rem 0.625rem;
   }
 
   .state-msg {
     color: var(--color-muted, #888);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     text-align: center;
     padding: 1rem 0;
   }
 
   .error {
     color: var(--color-error, #e55);
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     padding: 0.25rem 0;
   }
 
@@ -171,45 +177,20 @@
     cursor: not-allowed;
   }
 
-  .btn-primary {
-    background: var(--color-accent, #5b8def);
-    border-color: var(--color-accent, #5b8def);
-    color: #fff;
-  }
-
   .value-block {
-    background: var(--color-surface-raised, #222);
-    border: 1px solid var(--color-border, #333);
-    border-radius: 4px;
-    padding: 0.75rem;
+    background: color-mix(in srgb, var(--color-surface) 60%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent);
+    border-radius: 8px;
+    padding: 1.25rem;
     overflow: auto;
-    font-size: 0.8125rem;
-    line-height: 1.5;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
     color: var(--color-fg);
     margin: 0;
     white-space: pre-wrap;
     word-break: break-all;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
   }
 
-  .edit-area {
-    width: 100%;
-    background: var(--color-input-bg, #1a1a1a);
-    border: 1px solid var(--color-border, #333);
-    border-radius: 4px;
-    color: var(--color-fg);
-    font-family: monospace;
-    font-size: 0.8125rem;
-    padding: 0.75rem;
-    resize: vertical;
-    outline: none;
-  }
-
-  .edit-area:focus {
-    border-color: var(--color-accent, #5b8def);
-  }
-
-  .edit-actions {
-    display: flex;
-    gap: 0.375rem;
-  }
 </style>
