@@ -1,0 +1,354 @@
+---
+layout: default
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redix – Next-Gen Redis GUI</title>
+  <meta name="description" content="Redix is a modern, fast, and lightweight Redis GUI built with Tauri v2, Rust, and Svelte 5. Browse, edit, and manage Redis data with a premium glassmorphism UI." />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 0 60px;
+    }
+    .hero img {
+      width: 96px;
+      margin-bottom: 16px;
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ff6b35, #f7c948);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p.tagline {
+      font-size: 1.2rem;
+      color: #8b949e;
+      margin-top: 8px;
+    }
+    .hero p.desc {
+      font-size: 1rem;
+      color: #6e7681;
+      margin-top: 4px;
+    }
+    .hero .btns {
+      margin-top: 28px;
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #ff6b35, #e85d2c);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(255, 107, 53, 0.35);
+    }
+    .btn-secondary {
+      background: #21262d;
+      color: #e6edf3;
+      border: 1px solid #30363d;
+    }
+    .btn-secondary:hover {
+      background: #30363d;
+      transform: translateY(-2px);
+    }
+
+    /* Section */
+    section {
+      padding: 60px 0;
+    }
+    section h2 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: #f0f6fc;
+    }
+
+    /* Screenshots */
+    .screenshots {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .screenshots img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .screenshots .caption {
+      font-size: 0.9rem;
+      color: #8b949e;
+      text-align: center;
+      margin-top: -12px;
+    }
+
+    /* Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+    }
+    .feature-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 24px;
+      transition: border-color 0.2s;
+    }
+    .feature-card:hover {
+      border-color: #ff6b35;
+    }
+    .feature-card .icon {
+      font-size: 1.6rem;
+      margin-bottom: 8px;
+    }
+    .feature-card h3 {
+      font-size: 1.05rem;
+      margin-bottom: 6px;
+    }
+    .feature-card p {
+      font-size: 0.9rem;
+      color: #8b949e;
+    }
+
+    /* Tech Stack */
+    .tech-stack {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .tech-badge {
+      background: #21262d;
+      border: 1px solid #30363d;
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    /* Download */
+    .download-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    .download-table th, .download-table td {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid #30363d;
+    }
+    .download-table th {
+      color: #8b949e;
+      font-weight: 600;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .download-table td {
+      font-size: 0.95rem;
+    }
+    .download-table a {
+      color: #58a6ff;
+      text-decoration: none;
+    }
+    .download-table a:hover {
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 40px 0;
+      color: #484f58;
+      font-size: 0.85rem;
+      border-top: 1px solid #21262d;
+      margin-top: 20px;
+    }
+    footer a {
+      color: #8b949e;
+      text-decoration: none;
+    }
+    footer a:hover {
+      color: #e6edf3;
+    }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 2rem; }
+      .hero { padding: 48px 0 32px; }
+      section { padding: 32px 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- Hero -->
+    <header class="hero">
+      <img src="static/logo.svg" alt="Redix Logo" />
+      <h1>Redix</h1>
+      <p class="tagline">The next-generation Redis GUI for power users.</p>
+      <p class="desc">Fast, elegant, and lightweight. Built with Tauri v2, Rust, and Svelte 5.</p>
+      <div class="btns">
+        <a class="btn btn-primary" href="https://github.com/luqmannulhakim/redix/releases" target="_blank">
+          ⬇ Download
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/luqmannulhakim/redix" target="_blank">
+          View on GitHub
+        </a>
+      </div>
+    </header>
+
+    <!-- Screenshots -->
+    <section>
+      <h2>Screenshots</h2>
+      <div class="screenshots">
+        <div>
+          <img src="img/1.png" alt="Redix main interface — browsing Redis keys with glassmorphism dark UI" loading="lazy" />
+          <p class="caption">Browsing keys and inspecting values in the tree sidebar with tabbed detail views.</p>
+        </div>
+        <div>
+          <img src="img/2.png" alt="Redix value viewer and command console" loading="lazy" />
+          <p class="caption">Rich value viewer with JSON auto-formatting and the live command console at the bottom.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section>
+      <h2>Features</h2>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="icon">🎨</div>
+          <h3>Modern &amp; Premium UI</h3>
+          <p>Deep dark glassmorphism aesthetic with slick animations and micro-interactions. Light mode included.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">📂</div>
+          <h3>Tabbed Interface</h3>
+          <p>Work on multiple keys at once. Double-click any key from the sidebar to open it in a new tab.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🌳</div>
+          <h3>Advanced Key Tree</h3>
+          <p>Visualize deeply nested Redis keys (<code>user:profile:123</code>) in an intuitive tree structure.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">📊</div>
+          <h3>All Data Types</h3>
+          <p>Rich, editable viewers for Strings, Hashes, Lists, Sets, and Sorted Sets. JSON auto-formatting included.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🖥️</div>
+          <h3>Command Console</h3>
+          <p>Monitor real-time commands with duration metrics, or type raw Redis commands directly.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">📤</div>
+          <h3>CSV Export</h3>
+          <p>Instantly export Hash, List, Set, or Sorted Set data to <code>.csv</code> for external analysis.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">⚡</div>
+          <h3>Blazing Fast</h3>
+          <p>Native performance powered by Tauri v2 and Rust — no Electron bloat, minimal memory footprint.</p>
+        </div>
+        <div class="feature-card">
+          <div class="icon">💻</div>
+          <h3>Cross-Platform</h3>
+          <p>Available for macOS, Windows, and Linux. One codebase, native feel on every OS.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section>
+      <h2>Tech Stack</h2>
+      <div class="tech-stack">
+        <span class="tech-badge">Svelte 5</span>
+        <span class="tech-badge">Vite</span>
+        <span class="tech-badge">Tauri v2</span>
+        <span class="tech-badge">Rust</span>
+        <span class="tech-badge">pnpm</span>
+      </div>
+    </section>
+
+    <!-- Download -->
+    <section>
+      <h2>Download</h2>
+      <p style="color:#8b949e; margin-bottom:8px;">Grab the latest installer for your platform from GitHub Releases.</p>
+      <table class="download-table">
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Format</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>macOS (Intel / Apple Silicon)</td>
+            <td>.dmg</td>
+            <td><a href="https://github.com/luqmannulhakim/redix/releases" target="_blank">Download</a></td>
+          </tr>
+          <tr>
+            <td>Windows</td>
+            <td>.exe (NSIS)</td>
+            <td><a href="https://github.com/luqmannulhakim/redix/releases" target="_blank">Download</a></td>
+          </tr>
+          <tr>
+            <td>Linux</td>
+            <td>.deb / .AppImage</td>
+            <td><a href="https://github.com/luqmannulhakim/redix/releases" target="_blank">Download</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p>Redix &mdash; crafted with ❤️ for Redis Developers.</p>
+      <p style="margin-top:4px;"><a href="https://github.com/luqmannulhakim/redix">GitHub</a></p>
+    </footer>
+
+  </div>
+
+</body>
+</html>
