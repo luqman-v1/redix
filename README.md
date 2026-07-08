@@ -11,6 +11,12 @@
 
 **Redix** is a modern desktop visualizer and manager for your Redis databases. Unlike bloated electron-based database managers, Redix leverages the power of **Tauri** and **Rust** to provide a blazing fast native experience while sporting a premium "Deep Dark Glassmorphism" UI built with Svelte 5.
 
+## 📸 Screenshots
+
+<img src="img/1.png" alt="Redix Screenshot 1" width="600" />
+
+<img src="img/2.png" alt="Redix Screenshot 2" width="600" />
+
 ## ✨ Features
 
 - **Modern & Premium UI:** Deep dark glassmorphism aesthetic with slick animations and micro-interactions. Includes a Light Mode toggle.
