@@ -54,21 +54,33 @@
       let c = currentCursor;
       let iterations = 0;
       
-      do {
-        if (iterations > 0 && c === 0) break;
-        const result = await invoke<{ cursor: number; keys: string[] }>(
-          "scan_keys",
-          {
-            connectionId,
-            cursor: c,
-            count: 1000,
-            pattern,
-          }
-        );
-        c = result.cursor;
-        newKeys.push(...result.keys);
-        iterations++;
-      } while (newKeys.length < PAGE_SIZE && c !== 0 && iterations < 20);
+      const isExact = pattern && !pattern.includes('*') && !pattern.includes('?') && !pattern.includes('[');
+      
+      if (isExact && reset) {
+        const type = await invoke<string>("get_key_type", { connectionId, key: pattern });
+        if (type !== "none") {
+          newKeys.push(pattern);
+        }
+        c = 0;
+      } else {
+        do {
+          if (iterations > 0 && c === 0) break;
+          const result = await invoke<{ cursor: number; keys: string[] }>(
+            "scan_keys",
+            {
+              connectionId,
+              cursor: c,
+              count: 10000,
+              pattern,
+            }
+          );
+          c = result.cursor;
+          newKeys.push(...result.keys);
+          iterations++;
+          // ponytail: removed iteration limit so sparse wildcard searches (e.g. foo:*) 
+          // don't abort prematurely on huge DBs. Will scan until PAGE_SIZE found or DB end.
+        } while (newKeys.length < PAGE_SIZE && c !== 0);
+      }
 
       currentCursor = c;
       const uniqueKeys = Array.from(new Set([...allKeys, ...newKeys]));

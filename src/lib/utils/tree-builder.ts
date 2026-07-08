@@ -12,7 +12,7 @@ interface BuildNode {
   name: string;
   path: string;
   children: Record<string, BuildNode>;
-  isLeaf: boolean;
+  isKey: boolean;
 }
 
 export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
@@ -26,28 +26,23 @@ export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       path = path ? `${path}${separator}${part}` : part;
-      const isLeaf = i === parts.length - 1;
+      const isLast = i === parts.length - 1;
 
       if (!current[part]) {
         current[part] = {
           name: part,
           path,
           children: {},
-          isLeaf,
+          isKey: false,
         };
       }
 
-      if (isLeaf) {
-        current[part].isLeaf = true;
+      if (isLast) {
+        current[part].isKey = true;
         current[part].path = key;
-      } else if (current[part].isLeaf) {
-        // was leaf, now has children — make it a folder
-        current[part].isLeaf = false;
       }
 
-      if (!isLeaf) {
-        current = current[part].children;
-      }
+      current = current[part].children;
     }
   }
 
@@ -55,13 +50,28 @@ export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
 }
 
 function toTreeNodes(record: Record<string, BuildNode>): TreeNode[] {
-  return Object.values(record).map(node => ({
-    name: node.name,
-    path: node.path,
-    children: toTreeNodes(node.children),
-    isLeaf: node.isLeaf,
-    count: 0,
-  }));
+  return Object.values(record).map(node => {
+    let children = toTreeNodes(node.children);
+    if (node.isKey && children.length > 0) {
+      children = [
+        {
+          name: "(value)",
+          path: node.path,
+          children: [],
+          isLeaf: true,
+          count: 1
+        },
+        ...children
+      ];
+    }
+    return {
+      name: node.name,
+      path: node.path,
+      children,
+      isLeaf: children.length === 0,
+      count: 0,
+    };
+  });
 }
 
 function sortNodes(nodes: TreeNode[]): TreeNode[] {
