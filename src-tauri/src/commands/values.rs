@@ -2,7 +2,9 @@ use serde::Serialize;
 use tauri::State;
 
 use super::keys::ConnectionManager;
-use crate::redis::client::RedisValue;
+use crate::redis::types::RedisValue;
+use std::sync::Arc;
+use crate::redis::client::RedisClient;
 
 #[derive(Serialize)]
 pub struct StreamEntry {
@@ -72,6 +74,17 @@ fn parse_string_array(val: RedisValue) -> Result<Vec<String>, String> {
     }
 }
 
+async fn get_client(
+    manager: &State<'_, ConnectionManager>,
+    connection_id: &str,
+) -> Result<Arc<dyn RedisClient>, String> {
+    let map = manager.lock().await;
+    Ok(Arc::clone(
+        map.get(connection_id)
+            .ok_or_else(|| format!("connection '{}' not found", connection_id))?,
+    ))
+}
+
 // --- String commands ---
 
 #[tauri::command]
@@ -80,10 +93,7 @@ pub async fn get_string_value(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<String, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("GET", vec![key]).await?;
     parse_string(val)
 }
@@ -95,10 +105,7 @@ pub async fn set_string_value(
     value: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("SET", vec![key, value]).await?;
     parse_ok(val)
 }
@@ -111,10 +118,7 @@ pub async fn get_hash_all(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<(String, String)>, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("HGETALL", vec![key]).await?;
     match val {
         RedisValue::Array(arr) => {
@@ -148,10 +152,7 @@ pub async fn set_hash_field(
     value: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("HSET", vec![key, field, value]).await?;
     parse_ok(val)
 }
@@ -163,10 +164,7 @@ pub async fn del_hash_field(
     field: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("HDEL", vec![key, field]).await?;
     parse_ok(val)
 }
@@ -181,10 +179,7 @@ pub async fn get_list_range(
     stop: i64,
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<String>, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client
         .execute("LRANGE", vec![key, start.to_string(), stop.to_string()])
         .await?;
@@ -199,10 +194,7 @@ pub async fn set_list_value(
     value: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client
         .execute("LSET", vec![key, index.to_string(), value])
         .await?;
@@ -217,10 +209,7 @@ pub async fn list_push(
     side: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let cmd = match side.as_str() {
         "left" => "LPUSH",
         "right" => "RPUSH",
@@ -237,10 +226,7 @@ pub async fn list_pop(
     side: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<Option<String>, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let cmd = match side.as_str() {
         "left" => "LPOP",
         "right" => "RPOP",
@@ -258,10 +244,7 @@ pub async fn get_set_members(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<String>, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("SMEMBERS", vec![key]).await?;
     parse_string_array(val)
 }
@@ -273,10 +256,7 @@ pub async fn add_set_member(
     member: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("SADD", vec![key, member]).await?;
     parse_ok(val)
 }
@@ -288,10 +268,7 @@ pub async fn del_set_member(
     member: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("SREM", vec![key, member]).await?;
     parse_ok(val)
 }
@@ -306,10 +283,7 @@ pub async fn get_sorted_set_range(
     stop: i64,
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<(String, f64)>, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client
         .execute(
             "ZRANGE",
@@ -350,10 +324,7 @@ pub async fn add_sorted_set(
     member: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client
         .execute("ZADD", vec![key, score.to_string(), member])
         .await?;
@@ -367,10 +338,7 @@ pub async fn del_sorted_set_member(
     member: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("ZREM", vec![key, member]).await?;
     parse_ok(val)
 }
@@ -386,10 +354,7 @@ pub async fn get_stream_range(
     count: i64,
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<StreamEntry>, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let args = if count > 0 {
         vec![
             key,
@@ -461,10 +426,7 @@ pub async fn get_hyperloglog_count(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<i64, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = get_client(&manager, &connection_id).await?;
     let val = client.execute("PFCOUNT", vec![key]).await?;
     parse_i64(val)
 }
@@ -477,17 +439,39 @@ pub async fn get_geo_members(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<GeoMember>, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
-    let members_val = client.execute("ZRANGE", vec![key.clone(), "0".into(), "-1".into()]).await?;
-    let members = parse_string_array(members_val)?;
-    if members.is_empty() {
+    let client = get_client(&manager, &connection_id).await?;
+    let members_val = client.execute("ZRANGE", vec![key.clone(), "0".into(), "-1".into(), "WITHSCORES".into()]).await?;
+    let members_with_scores = match members_val {
+        RedisValue::Array(arr) => {
+            let mut result = Vec::with_capacity(arr.len() / 2);
+            let mut iter = arr.into_iter();
+            while let Some(member) = iter.next() {
+                let score = iter.next().unwrap_or(RedisValue::Nil);
+                let m = match member {
+                    RedisValue::String(s) | RedisValue::Status(s) => s,
+                    other => other.to_display_string(),
+                };
+                let s = match score {
+                    RedisValue::String(s) => s.parse::<f64>().unwrap_or(0.0),
+                    RedisValue::Float(f) => f,
+                    RedisValue::Integer(n) => n as f64,
+                    _ => 0.0,
+                };
+                result.push((m, s));
+            }
+            result
+        }
+        RedisValue::Nil => vec![],
+        RedisValue::Error(e) => return Err(e),
+        _ => return Err("unexpected response type".into()),
+    };
+
+    if members_with_scores.is_empty() {
         return Ok(vec![]);
     }
+
     let mut geopos_args = vec![key.clone()];
-    for m in &members {
+    for (m, _) in &members_with_scores {
         geopos_args.push(m.clone());
     }
     let val = client.execute("GEOPOS", geopos_args).await?;
@@ -495,7 +479,7 @@ pub async fn get_geo_members(
     match val {
         RedisValue::Array(positions) => {
             for (i, pos) in positions.into_iter().enumerate() {
-                let member = members[i].clone();
+                let (member, score) = members_with_scores[i].clone();
                 match pos {
                     RedisValue::Array(coords) if coords.len() >= 2 => {
                         let lon = match &coords[0] {
@@ -508,18 +492,10 @@ pub async fn get_geo_members(
                             RedisValue::Float(f) => *f,
                             _ => 0.0,
                         };
-                        let score_val = client
-                            .execute("ZSCORE", vec![key.clone(), member.clone()])
-                            .await;
-                        let score = match score_val {
-                            Ok(RedisValue::String(s)) => s.parse::<f64>().unwrap_or(0.0),
-                            Ok(RedisValue::Float(f)) => f,
-                            _ => 0.0,
-                        };
                         result.push(GeoMember { member, longitude: lon, latitude: lat, score });
                     }
                     RedisValue::Nil => {
-                        result.push(GeoMember { member, longitude: 0.0, latitude: 0.0, score: 0.0 });
+                        result.push(GeoMember { member, longitude: 0.0, latitude: 0.0, score });
                     }
                     _ => {}
                 }

@@ -13,16 +13,18 @@
   let deletingId = $state<string | null>(null);
   let connectingId = $state<string | null>(null);
 
+  const UNCATEGORIZED = "Uncategorized";
+
   let groupedConnections = $derived((() => {
     const groups: Record<string, ConnectionConfig[]> = {};
     for (const conn of connectionList) {
-      const folder = conn.folder || "Uncategorized";
+      const folder = conn.folder || UNCATEGORIZED;
       if (!groups[folder]) groups[folder] = [];
       groups[folder].push(conn);
     }
     return Object.entries(groups).sort((a, b) => {
-      if (a[0] === "Uncategorized") return 1;
-      if (b[0] === "Uncategorized") return -1;
+      if (a[0] === UNCATEGORIZED) return 1;
+      if (b[0] === UNCATEGORIZED) return -1;
       return a[0].localeCompare(b[0]);
     }).map(([folder, conns]) => ({ folder, conns }));
   })());
@@ -178,8 +180,8 @@
   }
 
   .modal {
-    background: var(--color-surface, #1e1e1e);
-    border: 1px solid var(--color-border, #333);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: 12px;
     width: 36rem;
     max-width: 90vw;
@@ -228,7 +230,7 @@
     background: none;
     border: 1px solid var(--color-border);
     border-radius: 6px;
-    color: var(--color-accent, #6366f1);
+    color: var(--color-accent);
     padding: 0.25rem 0.5rem;
     font-size: 0.75rem;
     cursor: pointer;
@@ -286,9 +288,15 @@
     background: var(--color-bg);
   }
 
+  .item:focus {
+    background: var(--color-bg);
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
+  }
+
   .item.active {
     background: var(--color-bg);
-    outline: 2px solid var(--color-accent, #6366f1);
+    outline: 2px solid var(--color-accent);
     outline-offset: -2px;
   }
 
@@ -344,11 +352,11 @@
   }
 
   .icon-btn.danger:hover {
-    color: #ef4444;
+    color: var(--color-error);
   }
 
   .confirm-btn {
-    background: #ef4444;
+    background: var(--color-error);
     color: white;
     border: none;
     border-radius: 4px;
@@ -359,6 +367,6 @@
   }
 
   .confirm-btn:hover {
-    background: #dc2626;
+    opacity: 0.9;
   }
 </style>

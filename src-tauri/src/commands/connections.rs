@@ -1,10 +1,10 @@
+use std::sync::Arc;
 use log::{error, info};
 use tauri::State;
 
 use crate::config::{ConnectionConfig, ConnectionStore};
 use crate::commands::keys::ConnectionManager;
-use crate::redis::standalone::StandaloneClient;
-use crate::redis::client::RedisClient;
+use crate::redis::client::create_client;
 
 #[tauri::command]
 pub fn get_connections(store: State<'_, ConnectionStore>) -> Result<Vec<ConnectionConfig>, String> {
@@ -66,14 +66,24 @@ pub async fn connect_to_server(
             error!("[connect_to_server] config not found for id={}", connection_id);
             "Connection config not found".to_string()
         })?;
-    let mut client = StandaloneClient::new(config);
+    let mut client = create_client(config);
     client.connect().await.map_err(|e| {
         error!("[connect_to_server] connect failed: {}", e);
         format!("Connect failed: {e}")
     })?;
+    
     let mut map = manager.lock().await;
-    let logged_client = crate::redis::LoggingClient { inner: Box::new(client) };
-    map.insert(connection_id.clone(), Box::new(logged_client) as Box<dyn RedisClient>);
+    if let Some(mut old_client) = map.remove(&connection_id) {
+        drop(map);
+        if let Some(c) = Arc::get_mut(&mut old_client) {
+            let _ = c.disconnect().await;
+        }
+        map = manager.lock().await;
+    }
+    
+    let logged_client = crate::redis::LoggingClient { inner: client };
+    map.insert(connection_id.clone(), Arc::new(logged_client));
+    
     info!("[connect_to_server] connected to {}", connection_id);
     Ok(())
 }
@@ -84,25 +94,38 @@ pub async fn disconnect_server(
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
     info!("[disconnect_server] connection_id={}", connection_id);
-    let mut map = manager.lock().await;
-    if let Some(mut client) = map.remove(&connection_id) {
-        client.disconnect().await.map_err(|e| {
-            error!("[disconnect_server] {}", e);
-            format!("Disconnect failed: {e}")
-        })?;
+    let client = {
+        let mut map = manager.lock().await;
+        map.remove(&connection_id)
+    };
+    
+    if let Some(mut client) = client {
+        if let Some(c) = Arc::get_mut(&mut client) {
+            c.disconnect().await.map_err(|e| {
+                error!("[disconnect_server] {}", e);
+                format!("Disconnect failed: {e}")
+            })?;
+        }
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn test_connection(config: ConnectionConfig) -> Result<bool, String> {
+pub async fn test_connection(config: ConnectionConfig) -> Result<bool, String> {
     if config.host.is_empty() {
         return Err("host must not be empty".into());
     }
     if config.port == 0 {
         return Err("port must be greater than 0".into());
     }
-    Ok(true)
+    let mut client = create_client(config);
+    match client.connect().await {
+        Ok(_) => {
+            let _ = client.disconnect().await;
+            Ok(true)
+        }
+        Err(e) => Err(format!("Connection failed: {}", e)),
+    }
 }
 
 #[tauri::command]
@@ -120,14 +143,24 @@ pub async fn reconnect(
             error!("[reconnect] config not found for id={}", connection_id);
             "config not found".to_string()
         })?;
-    let mut client = StandaloneClient::new(config);
+    let mut client = create_client(config);
     client.connect().await.map_err(|e| {
         error!("[reconnect] connect failed: {}", e);
         e
     })?;
+    
     let mut map = manager.lock().await;
-    let logged_client = crate::redis::LoggingClient { inner: Box::new(client) };
-    map.insert(connection_id, Box::new(logged_client) as Box<dyn RedisClient>);
+    if let Some(mut old_client) = map.remove(&connection_id) {
+        drop(map);
+        if let Some(c) = Arc::get_mut(&mut old_client) {
+            let _ = c.disconnect().await;
+        }
+        map = manager.lock().await;
+    }
+    
+    let logged_client = crate::redis::LoggingClient { inner: client };
+    map.insert(connection_id, Arc::new(logged_client));
+    
     Ok(())
 }
 
@@ -136,14 +169,19 @@ pub async fn get_server_info(
     connection_id: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<std::collections::HashMap<String, String>, String> {
-    let mut map = manager.lock().await;
-    let client = map.get_mut(&connection_id).ok_or_else(|| "Not connected".to_string())?;
+    let client = {
+        let map = manager.lock().await;
+        Arc::clone(map.get(&connection_id).ok_or_else(|| "Not connected".to_string())?)
+    };
     
     let info_val = client.execute("INFO", vec![]).await?;
     let info_str = match info_val {
-        crate::redis::client::RedisValue::String(s) => s,
-        crate::redis::client::RedisValue::Status(s) => s,
-        _ => return Err("Invalid INFO response".into()),
+        crate::redis::types::RedisValue::String(s) => s,
+        crate::redis::types::RedisValue::Status(s) => s,
+        other => {
+            log::error!("[get_server_info] Invalid INFO response: {:?}", other);
+            return Err(format!("Invalid INFO response: {:?}", other));
+        }
     };
 
     let mut result = std::collections::HashMap::new();

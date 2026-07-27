@@ -1,9 +1,11 @@
 use async_trait::async_trait;
-use redis::{aio::MultiplexedConnection, Client, FromRedisValue, Value};
+use redis::{aio::MultiplexedConnection, Client, FromRedisValue, IntoConnectionInfo, Value};
 
-use crate::config::ConnectionConfig;
+use crate::config::connection::ConnectionConfig;
+use crate::redis::tls::build_tls_certificates;
 
-use super::client::{RedisClient, RedisValue};
+use super::client::RedisClient;
+use super::types::RedisValue;
 
 /// Standalone Redis client backed by a multiplexed connection.
 pub struct StandaloneClient {
@@ -32,6 +34,11 @@ fn build_url(config: &ConnectionConfig) -> String {
     }
 
     url.push_str(&format!("{}:{}/{}", config.host, config.port, config.db));
+    if let Some(ssl) = &config.ssl {
+        if ssl.skip_verify {
+            url.push_str("#insecure");
+        }
+    }
     url
 }
 
@@ -70,7 +77,15 @@ pub fn redis_value_to_string(val: Value) -> Result<String, String> {
 impl RedisClient for StandaloneClient {
     async fn connect(&mut self) -> Result<(), String> {
         let url = build_url(&self.config);
-        let client = Client::open(url).map_err(|e| format!("client creation failed: {}", e))?;
+        
+        let client = if self.config.use_ssl {
+            let certs = build_tls_certificates(&self.config)?;
+            let info = url.into_connection_info().map_err(|e| format!("invalid url: {}", e))?;
+            Client::build_with_tls(info, certs).map_err(|e| format!("client creation failed: {}", e))?
+        } else {
+            Client::open(url).map_err(|e| format!("client creation failed: {}", e))?
+        };
+
         let conn = client
             .get_multiplexed_tokio_connection()
             .await
@@ -97,8 +112,7 @@ impl RedisClient for StandaloneClient {
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String> {
         if self.config.readonly {
             let upper_cmd = cmd.to_uppercase();
-            let unsafe_cmds = ["SET", "DEL", "HSET", "RPUSH", "LPUSH", "SADD", "ZADD", "FLUSHALL", "FLUSHDB", "RENAME", "EXPIRE", "CONFIG"];
-            if unsafe_cmds.contains(&upper_cmd.as_str()) {
+            if crate::redis::UNSAFE_CMDS.contains(&upper_cmd.as_str()) {
                 return Err("Connection is in Read-Only mode".into());
             }
         }
@@ -113,6 +127,24 @@ impl RedisClient for StandaloneClient {
             .await
             .map_err(|e| format!("command failed: {}", e))?;
         Ok(convert_value(value))
+    }
+
+    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String> {
+        let conn = self.conn.as_ref().ok_or("not connected")?;
+        let mut conn = conn.clone();
+        let mut pipe = redis::pipe();
+        for (cmd, args) in cmds {
+            let mut redis_cmd = redis::cmd(&cmd);
+            for arg in &args {
+                redis_cmd.arg(arg);
+            }
+            pipe.add_command(redis_cmd);
+        }
+        let values: Vec<Value> = pipe
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| format!("pipeline failed: {}", e))?;
+        Ok(values.into_iter().map(convert_value).collect())
     }
 
     async fn scan_keys(

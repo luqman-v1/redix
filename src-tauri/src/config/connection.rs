@@ -84,6 +84,8 @@ pub struct ConnectionConfig {
     pub use_ssl: bool,
     #[serde(default = "default_timeout")]
     pub timeout: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sentinel_master_name: Option<String>,
 }
 
 fn default_timeout() -> u64 {
@@ -116,6 +118,7 @@ impl ConnectionConfig {
             folder: None,
             use_ssl: false,
             timeout: 30,
+            sentinel_master_name: None,
         }
     }
 }
@@ -154,7 +157,10 @@ mod tests {
             host: "bastion.example.com".to_string(),
             port: 22,
             username: "admin".to_string(),
-            auth: SshAuth::KeyFile("/home/admin/.ssh/id_rsa".to_string()),
+            auth: SshAuth::KeyFile { 
+                path: "/home/admin/.ssh/id_rsa".to_string(), 
+                passphrase: None 
+            },
         };
         let mut config = ConnectionConfig::new("tunnel", "127.0.0.1", 6379);
         config.ssh = Some(ssh.clone());
@@ -207,6 +213,10 @@ mod tests {
             host: "redis.example.com".to_string(),
             port: 6380,
             db: 3,
+            folder: None,
+            use_ssl: false,
+            timeout: 30,
+            sentinel_master_name: Some("mymaster".to_string()),
             password: Some("secret".to_string()),
             username: Some("admin".to_string()),
             connection_type: ConnectionType::Cluster,

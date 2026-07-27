@@ -18,6 +18,7 @@
   let input = $state("");
   let loading = $state(false);
   let historyIndex = $state(-1);
+  let savedInput = $state("");
   let outputEl = $state<HTMLDivElement | null>(null);
   let inputEl = $state<HTMLTextAreaElement | null>(null);
 
@@ -132,7 +133,7 @@
       const isError = response.result?.type === "Error";
       
       const formatRedisValue = (val: any, indent = 0): string => {
-        if (!val) return "(nil)";
+        if (val === null || val === undefined) return "(nil)";
         if (val.type === "Nil") return "(nil)";
         if (val.type === "String") return val.value; // Removed quotes for cleaner copy
         if (val.type === "Integer" || val.type === "Float") return String(val.value);
@@ -222,6 +223,7 @@
       if (historyItems.length === 0) return;
       e.preventDefault();
       if (historyIndex === -1) {
+        savedInput = input;
         historyIndex = historyItems.length - 1;
       } else if (historyIndex > 0) {
         historyIndex -= 1;
@@ -238,8 +240,9 @@
         input = historyItems[historyIndex];
       } else {
         historyIndex = -1;
-        input = "";
+        input = savedInput;
       }
+      return;
     }
   }
 
@@ -327,6 +330,8 @@
           data-console-input
           bind:this={inputEl}
           bind:value={input}
+          autocapitalize="off"
+          spellcheck="false"
           onkeydown={handleKeydown}
           onblur={handleBlur}
           onfocus={() => { if(suggestions.length > 0) showSuggestions = true; }}
@@ -463,11 +468,7 @@
     color: var(--color-error);
   }
 
-  .entry-duration {
-    color: var(--color-muted);
-    font-size: 0.6875rem;
-    padding-left: 1.25rem;
-  }
+
 
   .loading {
     color: var(--color-muted);
@@ -509,13 +510,13 @@
 
   .teleport-badge {
     font-size: 0.6875rem;
-    color: #e8a427;
-    background: color-mix(in srgb, #e8a427 10%, transparent);
+    color: var(--color-warning);
+    background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     padding: 0.125rem 0.375rem;
     border-radius: 4px;
     align-self: flex-start;
     margin-bottom: 0.25rem;
-    border: 1px solid color-mix(in srgb, #e8a427 30%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 30%, transparent);
   }
 
   .suggestions {
@@ -523,8 +524,8 @@
     bottom: 100%;
     left: 1.25rem;
     margin-bottom: 0.25rem;
-    background: var(--color-surface, #1e1e1e);
-    border: 1px solid var(--color-border, #333);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
     box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.5);
     display: flex;
@@ -542,7 +543,7 @@
   }
 
   .suggestion-item:hover, .suggestion-item.active {
-    background: var(--color-accent, #5b8def);
-    color: #fff;
+    background: var(--color-accent);
+    color: white;
   }
 </style>

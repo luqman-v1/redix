@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use once_cell::sync::OnceCell;
-use tauri::Manager;
+
 
 pub static APP_HANDLE: OnceCell<tauri::AppHandle> = OnceCell::new();
 
@@ -26,6 +26,7 @@ pub fn run() {
         .manage(config::ConnectionStore::default())
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::keys::ConnectionManager)
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::history::HistoryStore)
+        .manage(Arc::new(Mutex::new(HashMap::new())) as commands::pubsub::PubSubTasks)
         .invoke_handler(tauri::generate_handler![
             commands::connections::get_connections,
             commands::connections::add_connection,
@@ -63,6 +64,11 @@ pub fn run() {
             commands::console::execute_command,
             commands::history::get_history,
             commands::history::add_to_history,
+            commands::pubsub::subscribe_channel,
+            commands::pubsub::unsubscribe_channel,
+            commands::memory::analyze_memory,
+            commands::slowlog::get_slow_logs,
+            commands::slowlog::reset_slow_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

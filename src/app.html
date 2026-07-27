@@ -4,7 +4,14 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Tauri + SvelteKit + Typescript App</title>
+    <title>Redix</title>
+    <script>
+      (function() {
+        var t = localStorage.getItem('redix-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.classList.add(t);
+        else document.documentElement.classList.add('dark');
+      })();
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

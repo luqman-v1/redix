@@ -35,24 +35,24 @@
 
 .light {
   /* Steam Bang Style - Light Mode Adaptation */
-  --color-bg: #f3f4f6;
-  --bg-gradient: radial-gradient(ellipse at top, #ffffff 0%, #f3f4f6 100%);
+  --color-bg: #f8fafc;
+  --bg-gradient: radial-gradient(ellipse at top, #ffffff 0%, #f1f5f9 100%);
   
-  --color-surface: rgba(255, 255, 255, 0.6);
-  --color-surface-raised: rgba(255, 255, 255, 0.9);
-  --color-surface-input: rgba(255, 255, 255, 0.8);
-  --color-surface-btn: rgba(0, 0, 0, 0.05);
-  --color-surface-btn-hover: rgba(0, 0, 0, 0.1);
+  --color-surface: rgba(255, 255, 255, 0.85);
+  --color-surface-raised: #ffffff;
+  --color-surface-input: #ffffff;
+  --color-surface-btn: rgba(0, 0, 0, 0.04);
+  --color-surface-btn-hover: rgba(0, 0, 0, 0.08);
   
-  --color-fg: #111827;
-  --color-border: rgba(0, 0, 0, 0.1);
-  --color-border-hover: rgba(0, 0, 0, 0.2);
+  --color-fg: #0f172a;
+  --color-border: rgba(0, 0, 0, 0.12);
+  --color-border-hover: rgba(0, 0, 0, 0.25);
   
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
-  --color-accent-shadow: rgba(37, 99, 235, 0.3);
+  --color-accent-shadow: rgba(37, 99, 235, 0.2);
   
-  --color-muted: #6b7280;
+  --color-muted: #475569;
 }
 
 body {
@@ -167,6 +167,16 @@ input:not([type="checkbox"]):not([type="radio"]):focus, textarea:focus, select:f
   outline: none;
   border-color: var(--color-accent) !important;
   box-shadow: 0 0 0 2px var(--color-accent-shadow) !important;
+}
+
+datalist option, option, select option {
+  background-color: var(--color-surface-raised, #ffffff) !important;
+  color: var(--color-fg, #0f172a) !important;
+}
+
+::placeholder {
+  color: var(--color-muted) !important;
+  opacity: 0.8;
 }
 
 .modal {

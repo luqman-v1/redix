@@ -24,8 +24,16 @@
 - **Advanced Key Tree:** Visualize deeply nested Redis keys (`user:profile:123`) in an intuitive tree structure.
 - **Support for All Data Types:** Rich, editable viewers for Strings, Hashes, Lists, Sets, and Sorted Sets. (Includes JSON auto-formatting).
 - **Interactive Command Log / Console:** Open the bottom console to monitor commands executed by the app in real-time (with duration metrics), or type raw Redis commands directly!
-- **CSV Export:** Instantly export your Hash, List, Set, or Sorted Set data to a `.csv` file for external analysis.
 - **Cross-Platform:** Available and highly optimized for macOS, Windows, and Linux.
+
+### 🔥 Advanced Power Tools
+
+Redix comes loaded with enterprise-grade features out of the box. Check out our **[Advanced Features Guide](docs/advanced-features.md)** for more details on:
+* **📡 Live Pub/Sub Viewer**
+* **🧠 Redis Memory Analyzer (Top Keys Scanner)**
+* **🐌 Slow Log Profiler**
+* **💾 Two-Way Data Import & Export (CSV)**
+* **⏱️ Live TTL Monitoring**
 
 ## 🛠️ Tech Stack
 
@@ -72,6 +80,22 @@ To build the production installers for your current operating system:
 pnpm tauri build
 ```
 *The compiled installers will be available in `src-tauri/target/release/bundle/`.*
+
+## 🛑 Troubleshooting
+
+### macOS: "Redix is damaged and can't be opened"
+
+If you download the application outside the Mac App Store and see an error saying the app is damaged and should be moved to the Trash, this is macOS Gatekeeper putting the app in quarantine because it is unsigned.
+
+**To fix this:**
+
+1. Move the `Redix.app` to your **Applications** folder.
+2. Open the **Terminal** app.
+3. Run the following command to remove the quarantine attribute:
+   ```bash
+   xattr -cr "/Applications/Redix.app"
+   ```
+4. Double-click the app to open it normally.
 
 ---
 *Crafted with ❤️ for Redis Developers.*

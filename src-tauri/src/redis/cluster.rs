@@ -1,25 +1,30 @@
 use async_trait::async_trait;
 use redis::cluster_async::ClusterConnection;
-use redis::{cluster::ClusterClient as RedisClusterClient, FromRedisValue, Value};
+use redis::{FromRedisValue, Value};
 
 use crate::config::ConnectionConfig;
+use crate::redis::tls::build_tls_certificates;
 
-use super::client::{RedisClient, RedisValue};
+use super::client::RedisClient;
+use super::types::RedisValue;
 use super::standalone::{convert_value, redis_value_to_string};
 
 /// Redis Cluster client backed by a cluster connection.
 pub struct ClusterClient {
     config: ConnectionConfig,
     conn: Option<ClusterConnection>,
+    /// Cached standalone connection to entrypoint node for keyless commands (INFO, DBSIZE)
+    fallback_conn: tokio::sync::Mutex<Option<redis::aio::MultiplexedConnection>>,
 }
 
 impl ClusterClient {
     pub fn new(config: ConnectionConfig) -> Self {
-        Self { config, conn: None }
+        Self { config, conn: None, fallback_conn: tokio::sync::Mutex::new(None) }
     }
 
     fn build_urls(&self) -> Vec<String> {
-        let scheme = if self.config.use_ssl { "rediss://" } else { "redis://" };
+        let use_ssl = self.config.use_ssl || self.config.ssl.is_some();
+        let scheme = if use_ssl { "rediss://" } else { "redis://" };
         let mut url = String::from(scheme);
 
         match (&self.config.username, &self.config.password) {
@@ -33,6 +38,11 @@ impl ClusterClient {
         }
 
         url.push_str(&format!("{}:{}", self.config.host, self.config.port));
+        if let Some(ssl) = &self.config.ssl {
+            if ssl.skip_verify {
+                url.push_str("#insecure");
+            }
+        }
         vec![url]
     }
 }
@@ -41,7 +51,19 @@ impl ClusterClient {
 impl RedisClient for ClusterClient {
     async fn connect(&mut self) -> Result<(), String> {
         let urls = self.build_urls();
-        let client = RedisClusterClient::new(urls)
+        let mut builder = redis::cluster::ClusterClientBuilder::new(urls).retries(5);
+        if self.config.readonly {
+            builder = builder.read_from_replicas();
+        }
+        
+        let use_ssl = self.config.use_ssl || self.config.ssl.is_some();
+        if use_ssl {
+            let certs = build_tls_certificates(&self.config)?;
+            builder = builder.certs(certs);
+        }
+
+        let client = builder
+            .build()
             .map_err(|e| format!("cluster client creation failed: {}", e))?;
         let conn = client
             .get_async_connection()
@@ -67,17 +89,65 @@ impl RedisClient for ClusterClient {
     }
 
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String> {
+        if self.config.readonly {
+            let upper_cmd = cmd.to_uppercase();
+            if crate::redis::UNSAFE_CMDS.contains(&upper_cmd.as_str()) {
+                return Err("Connection is in Read-Only mode".into());
+            }
+        }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut redis_cmd = redis::cmd(cmd);
+        let upper_cmd = cmd.to_uppercase();
         for arg in &args {
             redis_cmd.arg(arg);
         }
-        let value: Value = redis_cmd
+        
+        // Intercept cluster-wide or keyless commands that cluster_async struggles with
+        if upper_cmd == "INFO" || upper_cmd == "DBSIZE" {
+            let mut fb_guard = self.fallback_conn.lock().await;
+            if fb_guard.is_none() {
+                let urls = self.build_urls();
+                let fallback_client = redis::Client::open(urls[0].clone())
+                    .map_err(|err| format!("fallback client failed: {}", err))?;
+                let fb_conn = fallback_client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|err| format!("fallback conn failed: {}", err))?;
+                *fb_guard = Some(fb_conn);
+            }
+            let mut fb = fb_guard.as_ref().unwrap().clone();
+            drop(fb_guard);
+            let value: Value = redis_cmd
+                .query_async(&mut fb)
+                .await
+                .map_err(|err| format!("command failed on fallback: {}", err))?;
+            return Ok(convert_value(value));
+        }
+
+        let value: Value = match redis_cmd.query_async(&mut conn).await {
+            Ok(v) => v,
+            Err(e) => return Err(format!("command failed: {}", e)),
+        };
+        Ok(convert_value(value))
+    }
+
+    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String> {
+        let conn = self.conn.as_ref().ok_or("not connected")?;
+        let mut conn = conn.clone();
+        let mut pipe = redis::pipe();
+        for (cmd, args) in cmds {
+            let mut redis_cmd = redis::cmd(&cmd);
+            for arg in &args {
+                redis_cmd.arg(arg);
+            }
+            pipe.add_command(redis_cmd);
+        }
+        let values: Vec<Value> = pipe
             .query_async(&mut conn)
             .await
-            .map_err(|e| format!("command failed: {}", e))?;
-        Ok(convert_value(value))
+            .map_err(|e| format!("pipeline failed: {}", e))?;
+        Ok(values.into_iter().map(convert_value).collect())
     }
 
     async fn scan_keys(
@@ -143,6 +213,9 @@ impl RedisClient for ClusterClient {
     }
 
     async fn del(&self, keys: Vec<&str>) -> Result<i64, String> {
+        if self.config.readonly {
+            return Err("Connection is in Read-Only mode".into());
+        }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut cmd = redis::cmd("DEL");
@@ -157,6 +230,9 @@ impl RedisClient for ClusterClient {
     }
 
     async fn rename(&self, old: &str, new: &str) -> Result<(), String> {
+        if self.config.readonly {
+            return Err("Connection is in Read-Only mode".into());
+        }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let _: Value = redis::cmd("RENAME")
@@ -169,6 +245,9 @@ impl RedisClient for ClusterClient {
     }
 
     async fn set_ttl(&self, key: &str, seconds: u64) -> Result<bool, String> {
+        if self.config.readonly {
+            return Err("Connection is in Read-Only mode".into());
+        }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("EXPIRE")
@@ -181,6 +260,9 @@ impl RedisClient for ClusterClient {
     }
 
     async fn persist(&self, key: &str) -> Result<bool, String> {
+        if self.config.readonly {
+            return Err("Connection is in Read-Only mode".into());
+        }
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("PERSIST")

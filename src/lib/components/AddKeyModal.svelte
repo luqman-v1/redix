@@ -55,6 +55,13 @@
     saving = true;
     try {
       if (keyType === "string") {
+        if (stringFormat.startsWith("json")) {
+          try {
+            JSON.parse(stringValue);
+          } catch (err) {
+            throw new Error("Invalid JSON: " + (err instanceof Error ? err.message : String(err)));
+          }
+        }
         await invoke("set_string_value", {
           connectionId,
           key: keyName.trim(),
@@ -127,7 +134,7 @@
 
       <div class="form-group">
         <label for="add-key-name">Key Name</label>
-        <input id="add-key-name" type="text" class="input" bind:value={keyName} placeholder="e.g. user:1001" />
+        <input id="add-key-name" type="text" class="input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" bind:value={keyName} placeholder="e.g. user:1001" />
       </div>
 
 
@@ -144,35 +151,35 @@
           {#if stringError}
             <div style="color:var(--color-error); font-size:0.75rem;">{stringError}</div>
           {/if}
-          <textarea id="add-string-value" class="input textarea" bind:value={stringValue} placeholder="String value..." rows="6"></textarea>
+          <textarea id="add-string-value" class="input textarea" autocomplete="off" autocapitalize="off" spellcheck="false" bind:value={stringValue} placeholder="String value..." rows="6"></textarea>
         </div>
       {:else if keyType === "hash"}
         <div class="form-group">
           <label for="add-hash-field">Field Name</label>
-          <input id="add-hash-field" type="text" class="input" bind:value={hashField} placeholder="e.g. name" />
+          <input id="add-hash-field" type="text" class="input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" bind:value={hashField} placeholder="e.g. name" />
         </div>
         <div class="form-group">
           <label for="add-hash-value">Value</label>
-          <textarea id="add-hash-value" class="input textarea" bind:value={hashValue} placeholder="Field value..." rows="3"></textarea>
+          <textarea id="add-hash-value" class="input textarea" autocomplete="off" autocapitalize="off" spellcheck="false" bind:value={hashValue} placeholder="Field value..." rows="3"></textarea>
         </div>
       {:else if keyType === "list"}
         <div class="form-group">
           <label for="add-list-value">Initial Value</label>
-          <input id="add-list-value" type="text" class="input" bind:value={listValue} placeholder="Item value" />
+          <input id="add-list-value" type="text" class="input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" bind:value={listValue} placeholder="Item value" />
         </div>
       {:else if keyType === "set"}
         <div class="form-group">
           <label for="add-set-member">Initial Member</label>
-          <input id="add-set-member" type="text" class="input" bind:value={setMember} placeholder="Member value" />
+          <input id="add-set-member" type="text" class="input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" bind:value={setMember} placeholder="Member value" />
         </div>
       {:else if keyType === "zset"}
         <div class="form-group">
           <label for="add-zset-score">Score</label>
-          <input id="add-zset-score" type="number" class="input" bind:value={zsetScore} placeholder="0" />
+          <input id="add-zset-score" type="number" class="input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" bind:value={zsetScore} placeholder="0" />
         </div>
         <div class="form-group">
           <label for="add-zset-member">Member</label>
-          <input id="add-zset-member" type="text" class="input" bind:value={zsetMember} placeholder="Member value" />
+          <input id="add-zset-member" type="text" class="input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" bind:value={zsetMember} placeholder="Member value" />
         </div>
       {/if}
     </div>

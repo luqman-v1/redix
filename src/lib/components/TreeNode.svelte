@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { TreeNode } from "$lib/utils/tree-builder";
   import Self from "./TreeNode.svelte";
+  import { ticker } from "$lib/utils/ticker";
 
   interface Props {
     node: TreeNode;
@@ -10,6 +11,31 @@
 
   let { node, depth, onselect }: Props = $props();
   let expanded = $state(false);
+
+  let baseTtl = $derived(node.ttl ?? -1);
+  let countdown = $state(0);
+  let currentTtl = $derived(baseTtl > 0 ? baseTtl - countdown : baseTtl);
+
+  $effect(() => {
+    const ttl = baseTtl;
+    countdown = 0;
+
+    if (ttl > 0) {
+      const unsub = ticker.subscribe(() => {
+        if (ttl - countdown > 0) countdown++;
+      });
+      return () => unsub();
+    }
+  });
+
+  function formatTtl(s: number): string {
+    if (s <= 0) return "";
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ${s % 60}s`;
+    const h = Math.floor(m / 60);
+    return `${h}h ${m % 60}m`;
+  }
 </script>
 
 {#if node.isLeaf}
@@ -20,6 +46,9 @@
   >
     <span class="icon">🔑</span>
     <span class="name">{node.name}</span>
+    {#if currentTtl > 0}
+      <span class="ttl-badge">⏳ {formatTtl(currentTtl)}</span>
+    {/if}
   </button>
 {:else}
   <button
@@ -91,5 +120,16 @@
     padding: 0.0625rem 0.375rem;
     border-radius: 9999px;
     flex-shrink: 0;
+  }
+
+  .ttl-badge {
+    margin-left: auto;
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    background: var(--color-surface-input);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-family: "JetBrains Mono", monospace;
+    opacity: 0.8;
   }
 </style>

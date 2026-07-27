@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { exportCsv } from "$lib/utils/csv";
+  import { toasts } from "$lib/stores/toasts";
+  import SyntaxValue from "./SyntaxValue.svelte";
+  import { exportCsv, importCsv } from "$lib/utils/csv";
 
   interface Props {
     connectionId: string;
@@ -52,6 +54,48 @@
     }
   }
 
+  async function handleDelete(member: string) {
+    try {
+      await invoke("del_sorted_set_member", { connectionId, key, member });
+      await load();
+    } catch (e) {
+      toasts.add(String(e), "error");
+    }
+  }
+
+  async function handleImportCsv() {
+    const rows = await importCsv();
+    if (!rows || rows.length === 0) return;
+
+    // Optional: skip header
+    let startIdx = 0;
+    if (rows[0].length >= 1 && (rows[0][0].toLowerCase() === 'score' || (rows[0].length >= 2 && rows[0][1].toLowerCase() === 'member'))) {
+      startIdx = 1;
+    }
+
+    loading = true;
+    try {
+      const chunks = [];
+      for (let i = startIdx; i < rows.length; i += 50) {
+        chunks.push(rows.slice(i, i + 50));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(chunk.map(row => {
+          if (row.length < 2) return Promise.resolve();
+          const score = parseFloat(row[0]);
+          if (isNaN(score)) return Promise.resolve();
+          return invoke("add_sorted_set", { connectionId, key, score, member: row[1] });
+        }));
+      }
+      toasts.add(`Imported ${rows.length - startIdx} members successfully`, "success");
+      await load();
+    } catch (e) {
+      toasts.add("Import failed: " + String(e), "error");
+      loading = false;
+    }
+  }
+
   $effect(() => {
     if (connectionId && key) {
       load();
@@ -68,7 +112,14 @@
     <div class="toolbar">
       <button 
         class="btn btn-secondary" 
-        style="margin-right: auto;"
+        style="margin-left: auto;"
+        onclick={handleImportCsv}
+        title="Import from CSV"
+      >
+        &#128194; Import CSV
+      </button>
+      <button 
+        class="btn btn-secondary" 
         onclick={() => exportCsv(`${key.split(':').pop()}_zset`, ['Score', 'Member'], sorted.map(row => [String(row[1]), row[0]]))}
         title="Export to CSV"
       >
@@ -96,7 +147,7 @@
             {#each sorted as [member, score] (member)}
               <tr>
                 <td class="col-score"><code>{score}</code></td>
-                <td class="col-member"><code>{member}</code></td>
+                <td class="col-member"><SyntaxValue value={member} /></td>
               </tr>
             {/each}
           </tbody>

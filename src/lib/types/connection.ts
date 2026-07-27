@@ -14,6 +14,7 @@ export interface ConnectionConfig {
   readonly: boolean;
   timeout: number;
   use_ssl?: boolean; // We keep this because Rust has `pub use_ssl: bool` now.
+  sentinel_master_name?: string;
 
   ssh?: {
     host: string;

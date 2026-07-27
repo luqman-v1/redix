@@ -132,7 +132,7 @@
         <tbody>
           <tr><td>Version</td><td>{info.redis_version || 'N/A'}</td></tr>
           <tr><td>OS</td><td>{info.os || 'N/A'}</td></tr>
-          <tr><td>Mode</td><td>{info.redis_mode || 'standalone'}</td></tr>
+          <tr><td>Mode</td><td>{info.redis_mode || (info.cluster_enabled === '1' ? 'cluster' : 'standalone')}</td></tr>
           <tr><td>Role</td><td>{info.role || 'master'}</td></tr>
           <tr><td>TCP Port</td><td>{info.tcp_port || '6379'}</td></tr>
           <tr><td>Executable</td><td>{info.executable || 'N/A'}</td></tr>
@@ -183,13 +183,8 @@
     margin: 0;
     font-size: 1.5rem;
     font-weight: 700;
-    background: linear-gradient(90deg, #fff, #a0a0a0);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
-  
-  :global(.light) .title {
-    background: linear-gradient(90deg, #111, #555);
+    background: linear-gradient(90deg, var(--color-fg), var(--color-muted));
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
@@ -215,8 +210,8 @@
   }
 
   .metric-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: color-mix(in srgb, var(--color-fg) 3%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-fg) 5%, transparent);
     border-radius: 12px;
     padding: 1.5rem;
     display: flex;
@@ -226,18 +221,9 @@
     transition: transform 0.2s, background 0.2s;
   }
 
-  :global(.light) .metric-card {
-    background: rgba(0, 0, 0, 0.02);
-    border: 1px solid rgba(0, 0, 0, 0.05);
-  }
-
   .metric-card:hover {
     transform: translateY(-2px);
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  :global(.light) .metric-card:hover {
-    background: rgba(0, 0, 0, 0.04);
+    background: color-mix(in srgb, var(--color-fg) 5%, transparent);
   }
 
   .metric-label {
@@ -265,15 +251,10 @@
   }
 
   .info-section {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: color-mix(in srgb, var(--color-fg) 2%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-fg) 5%, transparent);
     border-radius: 12px;
     padding: 1.5rem;
-  }
-
-  :global(.light) .info-section {
-    background: rgba(0, 0, 0, 0.01);
-    border: 1px solid rgba(0, 0, 0, 0.05);
   }
 
   .section-title {
@@ -290,11 +271,7 @@
 
   .info-table td {
     padding: 0.75rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  }
-  
-  :global(.light) .info-table td {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-fg) 5%, transparent);
   }
 
   .info-table tr:last-child td {

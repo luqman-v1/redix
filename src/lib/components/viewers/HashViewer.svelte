@@ -2,8 +2,9 @@
   import { invoke } from "@tauri-apps/api/core";
   import EditModal from "../EditModal.svelte";
   import PromptModal from "../PromptModal.svelte";
+  import SyntaxValue from "./SyntaxValue.svelte";
   import { toasts } from "$lib/stores/toasts";
-  import { exportCsv } from "$lib/utils/csv";
+  import { exportCsv, importCsv } from "$lib/utils/csv";
 
   interface Props {
     connectionId: string;
@@ -61,10 +62,42 @@
     }
   }
 
-  async function handleAddField(field: string) {
-    if (!field.trim()) return;
+  async function handleImportCsv() {
+    const rows = await importCsv();
+    if (!rows || rows.length === 0) return;
+
+    // Optional: skip header
+    let startIdx = 0;
+    if (rows[0].length >= 2 && rows[0][0].toLowerCase() === 'field' && rows[0][1].toLowerCase() === 'value') {
+      startIdx = 1;
+    }
+
+    loading = true;
+    try {
+      // Chunking to avoid overwhelming the IPC
+      const chunks = [];
+      for (let i = startIdx; i < rows.length; i += 50) {
+        chunks.push(rows.slice(i, i + 50));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(chunk.map(row => {
+          if (row.length < 2) return Promise.resolve();
+          return invoke("set_hash_field", { connectionId, key, field: row[0], value: row[1] });
+        }));
+      }
+      toasts.add(`Imported ${rows.length - startIdx} fields successfully`, "success");
+      await load();
+    } catch (e) {
+      toasts.add("Import failed: " + String(e), "error");
+      loading = false;
+    }
+  }
+
+  async function handleAddField(fieldName: string) {
+    if (!fieldName.trim()) return;
     addingField = false;
-    editingField = field.trim();
+    editingField = fieldName.trim();
     editingValue = "";
   }
 
@@ -102,6 +135,13 @@
       <button 
         class="btn btn-secondary" 
         style="margin-left: auto;"
+        onclick={handleImportCsv}
+        title="Import from CSV"
+      >
+        &#128194; Import CSV
+      </button>
+      <button 
+        class="btn btn-secondary" 
         onclick={() => exportCsv(`${key.split(':').pop()}_hash`, ['Field', 'Value'], filtered)}
         title="Export to CSV"
       >
@@ -127,7 +167,7 @@
               <tr>
                 <td class="col-field"><code>{field}</code></td>
                 <td class="col-value">
-                  <div class="val-content"><code>{value}</code></div>
+                  <div class="val-content"><SyntaxValue {value} /></div>
                 </td>
                 <td class="col-actions">
                   <button class="icon-btn" onclick={() => { editingField = field; editingValue = value; }} title="Edit">&#9998;</button>

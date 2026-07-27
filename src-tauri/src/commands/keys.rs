@@ -7,12 +7,18 @@ use tokio::sync::Mutex;
 
 use crate::redis::client::RedisClient;
 
-pub type ConnectionManager = Arc<Mutex<HashMap<String, Box<dyn RedisClient>>>>;
+pub type ConnectionManager = Arc<Mutex<HashMap<String, Arc<dyn RedisClient>>>>;
+
+#[derive(Serialize)]
+pub struct KeyInfo {
+    pub key: String,
+    pub ttl: i64,
+}
 
 #[derive(Serialize)]
 pub struct ScanResult {
     pub cursor: u64,
-    pub keys: Vec<String>,
+    pub keys: Vec<KeyInfo>,
 }
 
 #[tauri::command]
@@ -23,14 +29,29 @@ pub async fn scan_keys(
     pattern: Option<String>,
     manager: State<'_, ConnectionManager>,
 ) -> Result<ScanResult, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = {
+        let map = manager.lock().await;
+        Arc::clone(map
+            .get(&connection_id)
+            .ok_or_else(|| format!("connection '{}' not found", connection_id))?)
+    };
     let (next_cursor, keys) = client.scan_keys(cursor, count, pattern.as_deref()).await?;
+    
+    let mut key_infos = Vec::with_capacity(keys.len());
+    let mut futures = Vec::with_capacity(keys.len());
+    for key in &keys {
+        futures.push(client.get_ttl(key));
+    }
+    
+    let ttls = futures_util::future::join_all(futures).await;
+    for (i, key) in keys.into_iter().enumerate() {
+        let ttl = ttls[i].clone().unwrap_or(-1);
+        key_infos.push(KeyInfo { key, ttl });
+    }
+
     Ok(ScanResult {
         cursor: next_cursor,
-        keys,
+        keys: key_infos,
     })
 }
 
@@ -40,10 +61,12 @@ pub async fn get_key_type(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<String, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = {
+        let map = manager.lock().await;
+        Arc::clone(map
+            .get(&connection_id)
+            .ok_or_else(|| format!("connection '{}' not found", connection_id))?)
+    };
     client.get_type(&key).await
 }
 
@@ -53,10 +76,12 @@ pub async fn get_key_ttl(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<i64, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = {
+        let map = manager.lock().await;
+        Arc::clone(map
+            .get(&connection_id)
+            .ok_or_else(|| format!("connection '{}' not found", connection_id))?)
+    };
     client.get_ttl(&key).await
 }
 
@@ -66,10 +91,12 @@ pub async fn delete_key(
     key: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<i64, String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = {
+        let map = manager.lock().await;
+        Arc::clone(map
+            .get(&connection_id)
+            .ok_or_else(|| format!("connection '{}' not found", connection_id))?)
+    };
     client.del(vec![&key]).await
 }
 
@@ -80,10 +107,12 @@ pub async fn rename_key(
     new_name: String,
     manager: State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = {
+        let map = manager.lock().await;
+        Arc::clone(map
+            .get(&connection_id)
+            .ok_or_else(|| format!("connection '{}' not found", connection_id))?)
+    };
     client.rename(&old_name, &new_name).await
 }
 
@@ -94,10 +123,12 @@ pub async fn set_key_ttl(
     ttl: i64,
     manager: tauri::State<'_, ConnectionManager>,
 ) -> Result<(), String> {
-    let map = manager.lock().await;
-    let client = map
-        .get(&connection_id)
-        .ok_or_else(|| format!("connection '{}' not found", connection_id))?;
+    let client = {
+        let map = manager.lock().await;
+        Arc::clone(map
+            .get(&connection_id)
+            .ok_or_else(|| format!("connection '{}' not found", connection_id))?)
+    };
     
     if ttl <= 0 {
         client.persist(&key).await.map(|_| ())

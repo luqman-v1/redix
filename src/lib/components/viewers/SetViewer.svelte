@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { exportCsv } from "$lib/utils/csv";
+  import { toasts } from "$lib/stores/toasts";
+  import SyntaxValue from "./SyntaxValue.svelte";
+  import { exportCsv, importCsv } from "$lib/utils/csv";
 
   interface Props {
     connectionId: string;
@@ -62,6 +64,40 @@
     }
   }
 
+  async function handleImportCsv() {
+    const rows = await importCsv();
+    if (!rows || rows.length === 0) return;
+
+    // Optional: skip header
+    let startIdx = 0;
+    if (rows[0].length >= 1 && (rows[0][0].toLowerCase() === 'member' || (rows[0].length >= 2 && rows[0][1].toLowerCase() === 'member'))) {
+      startIdx = 1;
+    }
+
+    loading = true;
+    try {
+      const chunks = [];
+      for (let i = startIdx; i < rows.length; i += 50) {
+        chunks.push(rows.slice(i, i + 50));
+      }
+
+      for (const chunk of chunks) {
+        await Promise.all(chunk.map(row => {
+          const val = row.length >= 2 ? row[1] : row[0];
+          if (val !== undefined && val !== "") {
+            return invoke("add_set_member", { connectionId, key, member: val });
+          }
+          return Promise.resolve();
+        }));
+      }
+      toasts.add(`Imported ${rows.length - startIdx} members successfully`, "success");
+      await load();
+    } catch (e) {
+      toasts.add("Import failed: " + String(e), "error");
+      loading = false;
+    }
+  }
+
   $effect(() => {
     if (connectionId && key) {
       load();
@@ -85,6 +121,13 @@
       <button 
         class="btn btn-secondary" 
         style="margin-left: auto;"
+        onclick={handleImportCsv}
+        title="Import from CSV"
+      >
+        &#128194; Import CSV
+      </button>
+      <button 
+        class="btn btn-secondary" 
         onclick={() => exportCsv(`${key.split(':').pop()}_set`, ['Member'], filtered.map(m => [m]))}
         title="Export to CSV"
       >
@@ -112,7 +155,7 @@
       <ul class="member-list">
         {#each filtered as member (member)}
           <li class="member-item">
-            <code class="member-value">{member}</code>
+            <span class="member-value"><SyntaxValue value={member} /></span>
             <button
               class="btn btn-danger"
               onclick={() => removeMember(member)}

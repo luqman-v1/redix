@@ -1,9 +1,15 @@
+export interface KeyInfo {
+  key: string;
+  ttl: number;
+}
+
 export interface TreeNode {
   name: string;
   path: string;
   children: TreeNode[];
   isLeaf: boolean;
   count: number;
+  ttl?: number;
 }
 
 // ponytail: internal build node uses Record for children so lookups are O(1)
@@ -13,13 +19,14 @@ interface BuildNode {
   path: string;
   children: Record<string, BuildNode>;
   isKey: boolean;
+  ttl?: number;
 }
 
-export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
+export function buildTree(items: KeyInfo[], separator: string = ":"): TreeNode[] {
   const root: Record<string, BuildNode> = {};
 
-  for (const key of keys) {
-    const parts = key.split(separator).filter(p => p.length > 0);
+  for (const item of items) {
+    const parts = item.key.split(separator).filter(p => p.length > 0);
     let current = root;
     let path = "";
 
@@ -39,7 +46,8 @@ export function buildTree(keys: string[], separator: string = ":"): TreeNode[] {
 
       if (isLast) {
         current[part].isKey = true;
-        current[part].path = key;
+        current[part].path = item.key;
+        current[part].ttl = item.ttl;
       }
 
       current = current[part].children;
@@ -59,17 +67,22 @@ function toTreeNodes(record: Record<string, BuildNode>): TreeNode[] {
           path: node.path,
           children: [],
           isLeaf: true,
-          count: 1
+          count: 1,
+          ttl: node.ttl,
         },
         ...children
       ];
     }
+    const isLeaf = children.length === 0;
+    const count = isLeaf ? 1 : children.reduce((acc, c) => acc + c.count, 0);
+
     return {
       name: node.name,
       path: node.path,
       children,
-      isLeaf: children.length === 0,
-      count: 0,
+      isLeaf,
+      count,
+      ttl: node.ttl,
     };
   });
 }

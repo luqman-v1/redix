@@ -76,6 +76,10 @@
         disabled={saving}
         {placeholder}
         onkeydown={(e) => e.key === "Enter" && handleSave()}
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
         autofocus
       />
     </div>

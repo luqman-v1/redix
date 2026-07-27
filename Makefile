@@ -1,15 +1,20 @@
 SHELL := /bin/bash
-CARGO_ENV := source ~/.cargo/env &&
+CARGO_ENV := if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi;
+PNPM := npx pnpm
 
-.PHONY: dev build test test-rust test-e2e check clean
+.PHONY: dev build test test-rust test-e2e check clean install
+
+# Install dependencies
+install:
+	$(PNPM) install
 
 # Development
-dev:
-	$(CARGO_ENV) pnpm tauri dev
+dev: install
+	$(CARGO_ENV) $(PNPM) tauri dev
 
 # Production build
-build:
-	$(CARGO_ENV) pnpm tauri build
+build: install
+	$(CARGO_ENV) $(PNPM) tauri build
 
 # All tests
 test: test-rust check test-e2e
@@ -20,11 +25,11 @@ test-rust:
 
 # Frontend type check
 check:
-	pnpm check
+	$(PNPM) check
 
 # E2E tests
 test-e2e:
-	pnpm test:e2e
+	$(PNPM) test:e2e
 
 # Integration tests (requires Docker Redis)
 test-integration:

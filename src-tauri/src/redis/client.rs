@@ -1,73 +1,6 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
-/// Unified Redis value representation across all response types.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", content = "value")]
-pub enum RedisValue {
-    Nil,
-    String(String),
-    Integer(i64),
-    Float(f64),
-    Array(Vec<RedisValue>),
-    Status(String),
-    Error(String),
-    Bool(bool),
-}
-
-impl RedisValue {
-    pub fn is_nil(&self) -> bool {
-        matches!(self, RedisValue::Nil)
-    }
-
-    pub fn is_error(&self) -> bool {
-        matches!(self, RedisValue::Error(_))
-    }
-
-    pub fn as_str(&self) -> Option<&str> {
-        match self {
-            RedisValue::String(s) => Some(s),
-            RedisValue::Status(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    pub fn as_i64(&self) -> Option<i64> {
-        match self {
-            RedisValue::Integer(n) => Some(*n),
-            _ => None,
-        }
-    }
-
-    pub fn as_array(&self) -> Option<&Vec<RedisValue>> {
-        match self {
-            RedisValue::Array(a) => Some(a),
-            _ => None,
-        }
-    }
-
-    pub fn to_display_string(&self) -> String {
-        match self {
-            RedisValue::Nil => "(nil)".to_string(),
-            RedisValue::String(s) => format!("\"{}\"", s),
-            RedisValue::Integer(n) => n.to_string(),
-            RedisValue::Float(f) => format!("{}", f),
-            RedisValue::Array(a) => {
-                let items: Vec<String> = a.iter().map(|v| v.to_display_string()).collect();
-                format!("[{}]", items.join(", "))
-            }
-            RedisValue::Status(s) => s.clone(),
-            RedisValue::Error(e) => format!("(error) {}", e),
-            RedisValue::Bool(b) => b.to_string(),
-        }
-    }
-}
-
-impl Default for RedisValue {
-    fn default() -> Self {
-        RedisValue::Nil
-    }
-}
+use crate::redis::types::RedisValue;
 
 /// Trait abstracting Redis client operations.
 #[async_trait]
@@ -83,6 +16,9 @@ pub trait RedisClient: Send + Sync {
 
     /// Execute an arbitrary Redis command by name and arguments.
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String>;
+
+    /// Execute a pipeline of commands.
+    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String>;
 
     /// Scan keys using cursor-based pagination.
     /// Returns (next_cursor, keys).
@@ -111,6 +47,16 @@ pub trait RedisClient: Send + Sync {
     /// Remove TTL from a key (PERSIST).
     async fn persist(&self, key: &str) -> Result<bool, String>;
 }
+
+/// Create a Redis client instance matching the specified connection type (Standalone, Cluster, Sentinel).
+pub fn create_client(config: crate::config::ConnectionConfig) -> Box<dyn RedisClient> {
+    match config.connection_type {
+        crate::config::ConnectionType::Standalone => Box::new(super::standalone::StandaloneClient::new(config)),
+        crate::config::ConnectionType::Cluster => Box::new(super::cluster::ClusterClient::new(config)),
+        crate::config::ConnectionType::Sentinel => Box::new(super::sentinel::SentinelClient::new(config)),
+    }
+}
+
 
 /// A wrapper client that logs all command executions
 pub struct LoggingClient {
@@ -146,6 +92,15 @@ impl RedisClient for LoggingClient {
             format!("{} {}", cmd, args_str)
         };
         crate::redis::emit_command_log(&full_cmd, duration);
+        res
+    }
+
+    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String> {
+        let start = std::time::Instant::now();
+        let cmd_count = cmds.len();
+        let res = self.inner.execute_pipeline(cmds).await;
+        let duration = start.elapsed().as_millis() as u64;
+        crate::redis::emit_command_log(&format!("PIPELINE {} cmds", cmd_count), duration);
         res
     }
 
@@ -346,5 +301,20 @@ mod tests {
             let deserialized: RedisValue = serde_json::from_str(&json).unwrap();
             assert_eq!(val, deserialized);
         }
+    }
+
+    #[test]
+    fn test_create_client_factory() {
+        use crate::config::{ConnectionConfig, ConnectionType};
+
+        let mut config = ConnectionConfig::new("standalone-test", "127.0.0.1", 6379);
+        config.connection_type = ConnectionType::Standalone;
+        let _standalone = create_client(config.clone());
+
+        config.connection_type = ConnectionType::Cluster;
+        let _cluster = create_client(config.clone());
+
+        config.connection_type = ConnectionType::Sentinel;
+        let _sentinel = create_client(config.clone());
     }
 }

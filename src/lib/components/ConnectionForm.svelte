@@ -20,6 +20,7 @@
   let username = $state(e?.username ?? "");
   let password = $state(e?.password ?? "");
   let connectionType = $state<ConnectionType>(e?.type ?? "standalone");
+  let sentinelMasterName = $state(e?.sentinel_master_name ?? "mymaster");
   let keySeparator = $state(e?.key_separator ?? ":");
   let db = $state(e?.db ?? 0);
   let useSsl = $state(e?.use_ssl ?? false);
@@ -84,6 +85,7 @@
           username: username.trim() || undefined,
           password: password || undefined,
           type: connectionType,
+          sentinel_master_name: connectionType === "sentinel" ? sentinelMasterName.trim() : undefined,
           db,
           key_separator: keySeparator || ":",
           use_ssl: useSsl,
@@ -113,6 +115,7 @@
           username: username.trim() || undefined,
           password: password || undefined,
           type: connectionType,
+          sentinel_master_name: connectionType === "sentinel" ? sentinelMasterName.trim() : undefined,
           db,
           key_separator: keySeparator || ":",
           use_ssl: useSsl,
@@ -204,6 +207,12 @@
           <option value="sentinel">Sentinel</option>
         </select>
       </label>
+      {#if connectionType === "sentinel"}
+        <label class="field" style:flex="1">
+          <span class="label">Master Name</span>
+          <input type="text" bind:value={sentinelMasterName} placeholder="mymaster" />
+        </label>
+      {/if}
       <label class="field" style:flex="1">
         <span class="label">Database</span>
         <input type="number" bind:value={db} min="0" max="15" />

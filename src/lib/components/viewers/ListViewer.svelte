@@ -1,6 +1,8 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
-  import { exportCsv } from "$lib/utils/csv";
+  import { toasts } from "$lib/stores/toasts";
+  import SyntaxValue from "./SyntaxValue.svelte";
+  import { exportCsv, importCsv } from "$lib/utils/csv";
 
   interface Props {
     connectionId: string;
@@ -30,15 +32,49 @@
   async function pushItem(side: "left" | "right") {
     if (!pushValue.trim()) return;
     pushing = true;
-    error = null;
     try {
-      await invoke("list_push", { connectionId, key, value: pushValue, side });
+      await invoke("list_push", { connectionId, key, value: pushValue.trim(), side });
       pushValue = "";
       await load();
     } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
+      toasts.add(String(e), "error");
     } finally {
       pushing = false;
+    }
+  }
+
+  async function handleImportCsv() {
+    const rows = await importCsv();
+    if (!rows || rows.length === 0) return;
+
+    // Optional: skip header
+    let startIdx = 0;
+    if (rows[0].length >= 1 && (rows[0][0].toLowerCase() === 'value' || (rows[0].length >= 2 && rows[0][1].toLowerCase() === 'value'))) {
+      startIdx = 1;
+    }
+
+    loading = true;
+    try {
+      const chunks = [];
+      for (let i = startIdx; i < rows.length; i += 50) {
+        chunks.push(rows.slice(i, i + 50));
+      }
+
+      for (const chunk of chunks) {
+        // We push right for all imported items
+        await Promise.all(chunk.map(row => {
+          const val = row.length >= 2 ? row[1] : row[0];
+          if (val !== undefined && val !== "") {
+            return invoke("list_push", { connectionId, key, value: val, side: "right" });
+          }
+          return Promise.resolve();
+        }));
+      }
+      toasts.add(`Imported ${rows.length - startIdx} items successfully`, "success");
+      await load();
+    } catch (e) {
+      toasts.add("Import failed: " + String(e), "error");
+      loading = false;
     }
   }
 
@@ -72,6 +108,13 @@
       <button 
         class="btn btn-secondary" 
         style="margin-left: auto;"
+        onclick={handleImportCsv}
+        title="Import from CSV"
+      >
+        &#128194; Import CSV
+      </button>
+      <button 
+        class="btn btn-secondary" 
         onclick={() => exportCsv(`${key.split(':').pop()}_list`, ['Index', 'Value'], items.map((item, i) => [String(i), item]))}
         title="Export to CSV"
       >
@@ -95,7 +138,7 @@
             {#each items as item, i (i)}
               <tr>
                 <td class="col-index"><code>{i}</code></td>
-                <td class="col-value"><code>{item}</code></td>
+                <td class="col-value"><SyntaxValue value={item} /></td>
               </tr>
             {/each}
           </tbody>

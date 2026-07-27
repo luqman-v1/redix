@@ -73,6 +73,14 @@
     saving = true;
     error = "";
     try {
+      if (format.startsWith("json")) {
+        try {
+          JSON.parse(value);
+        } catch (err) {
+          throw new Error("Invalid JSON: " + (err instanceof Error ? err.message : String(err)));
+        }
+      }
+
       if (initialKeyName !== undefined) {
         if (!keyName.trim()) throw new Error("Key/field name cannot be empty");
         await onSave(value, keyName.trim());
@@ -116,7 +124,7 @@
       {#if initialKeyName !== undefined}
         <div class="form-group" style="margin-bottom:1rem;">
           <label for="key-name-input" style="display:block; font-size:0.75rem; font-weight:600; color:var(--color-muted); margin-bottom:0.25rem;">Key / Field Name</label>
-          <input id="key-name-input" type="text" class="key-input" bind:value={keyName} disabled={saving} />
+          <input id="key-name-input" type="text" class="key-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" bind:value={keyName} disabled={saving} />
         </div>
       {/if}
       <div class="toolbar">
@@ -134,6 +142,8 @@
         bind:value
         disabled={saving}
         placeholder="Enter value..."
+        autocomplete="off"
+        autocapitalize="off"
         spellcheck="false"
       ></textarea>
     </div>

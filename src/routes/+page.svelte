@@ -9,6 +9,9 @@
   import ConnectionList from "$lib/components/ConnectionList.svelte";
   import KeyTree from "$lib/components/KeyTree.svelte";
   import Console from "$lib/components/Console.svelte";
+  import PubSubViewer from "$lib/components/PubSubViewer.svelte";
+  import MemoryAnalyzer from "$lib/components/MemoryAnalyzer.svelte";
+  import SlowLogViewer from "$lib/components/SlowLogViewer.svelte";
   import ValueViewer from "$lib/components/viewers/ValueViewer.svelte";
   import PromptModal from "$lib/components/PromptModal.svelte";
   import AddKeyModal from "$lib/components/AddKeyModal.svelte";
@@ -70,6 +73,36 @@
     }
   }
 
+  function openPubSubTab() {
+    let idx = openTabs.findIndex(t => t.key === '__PUBSUB__');
+    if (idx === -1) {
+      openTabs.push({ key: '__PUBSUB__', type: null, ttl: null });
+      activeTabIndex = openTabs.length - 1;
+    } else {
+      activeTabIndex = idx;
+    }
+  }
+
+  function openMemoryAnalyzerTab() {
+    let idx = openTabs.findIndex(t => t.key === '__MEMORY_ANALYZER__');
+    if (idx === -1) {
+      openTabs.push({ key: '__MEMORY_ANALYZER__', type: null, ttl: null });
+      activeTabIndex = openTabs.length - 1;
+    } else {
+      activeTabIndex = idx;
+    }
+  }
+
+  function openSlowLogTab() {
+    let idx = openTabs.findIndex(t => t.key === '__SLOW_LOG__');
+    if (idx === -1) {
+      openTabs.push({ key: '__SLOW_LOG__', type: null, ttl: null });
+      activeTabIndex = openTabs.length - 1;
+    } else {
+      activeTabIndex = idx;
+    }
+  }
+
   let renamingKey = $state(false);
   let deletingKey = $state(false);
   let addingKey = $state(false);
@@ -89,7 +122,10 @@
     return unsub;
   });
 
+  let treeRefreshTrigger = $state(0);
+
   onMount(() => {
+    // Eagerly trigger connection store loading on client mount
     connections.load();
 
     const cleanup = registerShortcuts([
@@ -129,20 +165,18 @@
       appVersion = v;
     });
 
-
-    let unlistenLog: () => void;
-    listen<{command: string, duration: number}>("command-log", (e) => {
+    let unlistenPromise = listen<{command: string, duration: number}>("command-log", (e) => {
       commandLogs.push({
         command: e.payload.command,
         duration: e.payload.duration,
         timestamp: Date.now()
       });
       if (commandLogs.length > 200) commandLogs.shift();
-    }).then(fn => unlistenLog = fn);
+    });
 
     return () => {
       cleanup();
-      if (unlistenLog) unlistenLog();
+      unlistenPromise.then(fn => fn());
     };
   });
 
@@ -279,8 +313,7 @@
     if (!active) return;
     
     addingKey = false;
-    // We just wait for the user to click the key in the tree or we can forcefully reload the tree, 
-    // but setting selectedKey isn't enough to fetch the type automatically unless handleKeySelect is called.
+    treeRefreshTrigger++;
     handleKeySelect(keyName);
   }
 
@@ -339,11 +372,49 @@
             <line x1="6" y1="7" x2="11" y2="12"></line>
           </svg>
         </button>
+
+        <button 
+          class="action-btn" 
+          style="flex: 0 0 auto; padding: 0.375rem 0.5rem;"
+          title="Live Pub/Sub Viewer"
+          onclick={openPubSubTab}
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 11a9 9 0 0 1 9 9"></path>
+            <path d="M4 4a16 16 0 0 1 16 16"></path>
+            <circle cx="5" cy="19" r="1"></circle>
+          </svg>
+        </button>
+
+        <button 
+          class="action-btn" 
+          style="flex: 0 0 auto; padding: 0.375rem 0.5rem;"
+          title="Memory Analyzer"
+          onclick={openMemoryAnalyzerTab}
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </button>
+        <button 
+          class="action-btn" 
+          style="flex: 0 0 auto; padding: 0.375rem 0.5rem;"
+          title="Slow Log Viewer"
+          onclick={openSlowLogTab}
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </button>
         
       </div>
       <KeyTree
         connectionId={active.id}
         separator={active.key_separator}
+        refreshTrigger={treeRefreshTrigger}
         onselect={handleKeySelect}
       />
       
@@ -372,6 +443,12 @@
             >
               {#if tab.key === '__REDIS_CONSOLE__'}
                 <span class="tab-title" title="Console">📺 Console</span>
+              {:else if tab.key === '__PUBSUB__'}
+                <span class="tab-title" title="Pub/Sub">📡 Pub/Sub</span>
+              {:else if tab.key === '__MEMORY_ANALYZER__'}
+                <span class="tab-title" title="Memory Analyzer">🧠 Memory</span>
+              {:else if tab.key === '__SLOW_LOG__'}
+                <span class="tab-title" title="Slow Log">🐌 Slow Log</span>
               {:else}
                 <span class="tab-title" title={tab.key}>{tab.key.split(active.key_separator || ":").pop() || tab.key}</span>
               {/if}
@@ -389,8 +466,20 @@
       {/if}
 
       {#if selectedKey === '__REDIS_CONSOLE__'}
-        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; padding: 0.5rem 0 0 0;">
+        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--color-bg); padding: 0.5rem 0 0 0;">
           <Console connectionId={active.id} onclose={() => closeTab(activeTabIndex)} />
+        </div>
+      {:else if selectedKey === '__PUBSUB__'}
+        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--color-bg); padding: 0.5rem 0 0 0;">
+          <PubSubViewer config={active} />
+        </div>
+      {:else if selectedKey === '__MEMORY_ANALYZER__'}
+        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--color-bg); padding: 0.5rem 0 0 0;">
+          <MemoryAnalyzer connectionId={active.id} onselect={handleKeySelect} />
+        </div>
+      {:else if selectedKey === '__SLOW_LOG__'}
+        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--color-bg); padding: 0.5rem 0 0 0;">
+          <SlowLogViewer connectionId={active.id} />
         </div>
       {:else if selectedKeyType}
         {@const parts = selectedKey.split(active.key_separator || ":")}
