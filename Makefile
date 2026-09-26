@@ -2,7 +2,7 @@ SHELL := /bin/bash
 CARGO_ENV := if [ -f ~/.cargo/env ]; then source ~/.cargo/env; fi;
 BUN := bun
 
-.PHONY: dev build test test-rust test-e2e check clean install
+.PHONY: dev build test test-rust test-unit test-e2e check clean install
 
 # Install dependencies
 install:
@@ -17,11 +17,15 @@ build:
 	$(CARGO_ENV) $(BUN) tauri build
 
 # All tests
-test: test-rust check test-e2e
+test: test-rust test-unit check test-e2e
 
 # Rust unit tests
 test-rust:
 	$(CARGO_ENV) cd src-tauri && cargo test
+
+# Frontend unit tests
+test-unit:
+	$(BUN) run test:unit
 
 check:
 	$(BUN) run check
