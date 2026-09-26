@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import { invoke } from "@tauri-apps/api/core";
   import { getVersion } from "@tauri-apps/api/app";
   import { listen } from "@tauri-apps/api/event";
@@ -20,6 +21,7 @@
   import { connections, activeConnection, disconnectFromServer } from "$lib/stores/connections";
   import { theme } from "$lib/stores/theme";
   import { registerShortcuts } from "$lib/utils/shortcuts";
+  import { checkForUpdate, type UpdateInfo } from "$lib/utils/version-check";
   import type { ConnectionConfig } from "$lib/types/connection";
   import {
     openConsoleTab as openConsole,
@@ -43,6 +45,7 @@
   let openTabs = $state<Tab[]>([]);
   let activeTabIndex = $state(0);
   let appVersion = $state("");
+  let updateInfo = $state<UpdateInfo | null>(null);
   let selectedKey = $derived(openTabs[activeTabIndex]?.key ?? null);
   let selectedKeyType = $derived(openTabs[activeTabIndex]?.type ?? null);
   let selectedKeyTtl = $derived(openTabs[activeTabIndex]?.ttl ?? null);
@@ -158,8 +161,9 @@
       },
     ]);
 
-    getVersion().then(v => {
+    getVersion().then(async (v) => {
       appVersion = v;
+      updateInfo = await checkForUpdate(v);
     });
 
     let unlistenPromise = listen<{command: string, duration: number}>("command-log", (e) => {
@@ -343,6 +347,18 @@
       <div style="font-size: 0.65rem; color: var(--color-muted); text-align: center; padding-top: 0.5rem; opacity: 0.6; pointer-events: none;">
         Redix v{appVersion}
       </div>
+    {/if}
+
+    {#if updateInfo}
+      {@const release = updateInfo}
+      <button
+        class="update-banner"
+        title="Open the {release.latest} release on GitHub"
+        onclick={() => openUrl(release.url)}
+      >
+        <span class="update-title">Update available</span>
+        <span class="update-version">v{appVersion} &rarr; v{release.latest}</span>
+      </button>
     {/if}
   </div>
 {/snippet}
@@ -620,6 +636,38 @@
     color: var(--color-fg);
     border-color: var(--color-accent);
     background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  }
+
+  .update-banner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.125rem;
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid var(--color-accent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+    color: var(--color-fg);
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .update-banner:hover {
+    background: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+
+  .update-title {
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+
+  .update-version {
+    font-size: 0.65rem;
+    color: var(--color-muted);
+    font-family: "JetBrains Mono", monospace;
   }
 
   .main-empty {

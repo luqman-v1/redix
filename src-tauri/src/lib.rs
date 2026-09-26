@@ -19,6 +19,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(config::ConnectionStore::default())
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::keys::ConnectionManager)
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::history::HistoryStore)
