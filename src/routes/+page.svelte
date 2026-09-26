@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { getVersion } from "@tauri-apps/api/app";
   import { listen } from "@tauri-apps/api/event";
@@ -102,11 +102,16 @@
   let editingTtl = $state(false);
   let refreshKeyCount = $state(0);
 
-  // show connections by default if there's no active connection
+  // Show connections when there is no active connection. Untracked on
+  // showConnections so dismissing the modal is not immediately undone by
+  // this effect re-running; it still fires when the active connection drops.
   $effect(() => {
-    if (!active && !showConnections) {
-      showConnections = true;
-    }
+    active;
+    untrack(() => {
+      if (!active && !showConnections) {
+        showConnections = true;
+      }
+    });
   });
 
   $effect(() => {
