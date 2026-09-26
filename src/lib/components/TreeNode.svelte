@@ -1,31 +1,42 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { TreeNode } from "$lib/utils/tree-builder";
   import Self from "./TreeNode.svelte";
-  import { ticker } from "$lib/utils/ticker";
 
   interface Props {
     node: TreeNode;
     depth: number;
     onselect: (key: string) => void;
+    expandedPaths?: Set<string>;
+    ontoggle?: (path: string) => void;
+    now?: number;
   }
 
-  let { node, depth, onselect }: Props = $props();
-  let expanded = $state(false);
+  let { node, depth, onselect, expandedPaths, ontoggle, now = 0 }: Props = $props();
+  let internalExpanded = $state(false);
+  let isOpen = $derived(ontoggle && expandedPaths ? expandedPaths.has(node.path) : internalExpanded);
+
+  function toggle() {
+    if (ontoggle) ontoggle(node.path);
+    else internalExpanded = !internalExpanded;
+  }
 
   let baseTtl = $derived(node.ttl ?? -1);
   let countdown = $state(0);
   let currentTtl = $derived(baseTtl > 0 ? baseTtl - countdown : baseTtl);
 
   $effect(() => {
-    const ttl = baseTtl;
-    countdown = 0;
+    baseTtl;
+    untrack(() => { countdown = 0; });
+  });
 
-    if (ttl > 0) {
-      const unsub = ticker.subscribe(() => {
-        if (ttl - countdown > 0) countdown++;
-      });
-      return () => unsub();
-    }
+  // Driven by the single parent interval (`now`), not per-leaf subscriptions.
+  $effect(() => {
+    const t = now;
+    if (t <= 0) return;
+    untrack(() => {
+      if (baseTtl > 0 && baseTtl - countdown > 0) countdown++;
+    });
   });
 
   function formatTtl(s: number): string {
@@ -54,16 +65,16 @@
   <button
     class="tree-item folder"
     style:padding-left="{depth * 16 + 8}px"
-    onclick={() => (expanded = !expanded)}
+    onclick={toggle}
   >
-    <span class="toggle">{expanded ? "▼" : "▶"}</span>
+    <span class="toggle">{isOpen ? "▼" : "▶"}</span>
     <span class="icon">📁</span>
     <span class="name">{node.name}</span>
     <span class="badge">{node.count}</span>
   </button>
-  {#if expanded}
+  {#if isOpen}
     {#each node.children as child (child.path)}
-      <Self node={child} depth={depth + 1} {onselect} />
+      <Self node={child} depth={depth + 1} {onselect} {expandedPaths} {ontoggle} {now} />
     {/each}
   {/if}
 {/if}

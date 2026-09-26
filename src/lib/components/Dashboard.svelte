@@ -28,11 +28,10 @@
 
   onMount(() => {
     loadInfo();
-    timer = setInterval(loadInfo, 5000); // refresh every 5s
-  });
-
-  onDestroy(() => {
-    if (timer) clearInterval(timer);
+    // Skip INFO polling when the tab is hidden: saves 12 INFO/min per idle connection.
+    timer = setInterval(() => {
+      if (!document.hidden) loadInfo();
+    }, 5000);
   });
 
   function formatBytes(bytesStr: string | undefined) {

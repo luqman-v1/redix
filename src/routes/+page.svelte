@@ -21,9 +21,25 @@
   import { theme } from "$lib/stores/theme";
   import { registerShortcuts } from "$lib/utils/shortcuts";
   import type { ConnectionConfig } from "$lib/types/connection";
-
+  import {
+    openConsoleTab as openConsole,
+    openPubSubTab as openPubSub,
+    openMemoryAnalyzerTab as openMemory,
+    openSlowLogTab as openSlow,
+    openKeyTab,
+    closeTab as closeTabAt,
+    closeOtherTabs as closeOthers,
+    type Tab,
+  } from "$lib/stores/tabs";
+  import {
+    selectKey,
+    refreshKeyMeta,
+    renameKey as renameKeyAction,
+    setKeyTtl as setKeyTtlAction,
+    deleteKey as deleteKeyAction,
+    switchDatabase,
+  } from "$lib/utils/key-actions";
   let active = $state<ConnectionConfig | null>(null);
-  interface Tab { key: string; type: string | null; ttl: number | null; }
   let openTabs = $state<Tab[]>([]);
   let activeTabIndex = $state(0);
   let appVersion = $state("");
@@ -51,56 +67,32 @@
 
   function closeOtherTabs() {
     if (tabContextMenu) {
-      openTabs = [openTabs[tabContextMenu.index]];
-      activeTabIndex = 0;
+      const res = closeOthers(openTabs, tabContextMenu.index);
+      openTabs = res.tabs;
+      activeTabIndex = res.activeIndex;
       tabContextMenu = null;
     }
   }
 
-  $effect(() => {
-    function handleClick() { tabContextMenu = null; }
-    window.addEventListener("click", handleClick);
-    return () => window.removeEventListener("click", handleClick);
-  });
+  function applyTabResult(res: { tabs: Tab[]; activeIndex: number }) {
+    openTabs = res.tabs;
+    activeTabIndex = res.activeIndex;
+  }
 
   function openConsoleTab() {
-    let idx = openTabs.findIndex(t => t.key === '__REDIS_CONSOLE__');
-    if (idx === -1) {
-      openTabs.push({ key: '__REDIS_CONSOLE__', type: null, ttl: null });
-      activeTabIndex = openTabs.length - 1;
-    } else {
-      activeTabIndex = idx;
-    }
+    applyTabResult(openConsole(openTabs, activeTabIndex));
   }
 
   function openPubSubTab() {
-    let idx = openTabs.findIndex(t => t.key === '__PUBSUB__');
-    if (idx === -1) {
-      openTabs.push({ key: '__PUBSUB__', type: null, ttl: null });
-      activeTabIndex = openTabs.length - 1;
-    } else {
-      activeTabIndex = idx;
-    }
+    applyTabResult(openPubSub(openTabs, activeTabIndex));
   }
 
   function openMemoryAnalyzerTab() {
-    let idx = openTabs.findIndex(t => t.key === '__MEMORY_ANALYZER__');
-    if (idx === -1) {
-      openTabs.push({ key: '__MEMORY_ANALYZER__', type: null, ttl: null });
-      activeTabIndex = openTabs.length - 1;
-    } else {
-      activeTabIndex = idx;
-    }
+    applyTabResult(openMemory(openTabs, activeTabIndex));
   }
 
   function openSlowLogTab() {
-    let idx = openTabs.findIndex(t => t.key === '__SLOW_LOG__');
-    if (idx === -1) {
-      openTabs.push({ key: '__SLOW_LOG__', type: null, ttl: null });
-      activeTabIndex = openTabs.length - 1;
-    } else {
-      activeTabIndex = idx;
-    }
+    applyTabResult(openSlow(openTabs, activeTabIndex));
   }
 
   let renamingKey = $state(false);
@@ -181,29 +173,8 @@
   });
 
   async function handleKeySelect(key: string) {
-    if (!active) return;
-    try {
-      const typeStr = await invoke<string>("get_key_type", {
-        connectionId: active.id,
-        key,
-      });
-      const ttlVal = await invoke<number>("get_key_ttl", {
-        connectionId: active.id,
-        key,
-      });
-      
-      const existingIdx = openTabs.findIndex(t => t.key === key);
-      if (existingIdx >= 0) {
-        openTabs[existingIdx].type = typeStr;
-        openTabs[existingIdx].ttl = ttlVal;
-        activeTabIndex = existingIdx;
-      } else {
-        openTabs.push({ key, type: typeStr, ttl: ttlVal });
-        activeTabIndex = openTabs.length - 1;
-      }
-    } catch (e) {
-      toasts.add(String(e), "error");
-    }
+    const res = await selectKey(active, openTabs, activeTabIndex, key, openKeyTab);
+    if (res) applyTabResult(res);
   }
 
   async function handleDisconnect() {
@@ -217,113 +188,59 @@
 
   async function handleRename(newName: string) {
     if (!active || !selectedKey) return;
-    try {
-      await invoke("rename_key", {
-        connectionId: active.id,
-        oldName: selectedKey,
-        newName,
-      });
+    const ok = await renameKeyAction(active, selectedKey, newName);
+    if (ok) {
       openTabs[activeTabIndex].key = newName;
       renamingKey = false;
-    } catch (e) {
-      toasts.add(String(e), "error");
-      throw e;
     }
   }
 
   async function handleSetTtl(newTtlStr: string) {
     if (!active || !selectedKey) return;
-    try {
-      const parsed = parseInt(newTtlStr, 10);
-      if (isNaN(parsed)) throw new Error("Invalid TTL number");
-      
-      await invoke("set_key_ttl", {
-        connectionId: active.id,
-        key: selectedKey,
-        ttl: parsed,
-      });
-      
-      const newTtl = await invoke<number>("get_key_ttl", {
-        connectionId: active.id,
-        key: selectedKey,
-      });
-      
+    const newTtl = await setKeyTtlAction(active, selectedKey, newTtlStr);
+    if (newTtl !== null) {
       openTabs[activeTabIndex].ttl = newTtl;
       editingTtl = false;
-      toasts.add("TTL updated successfully", "success");
-    } catch (e) {
-      toasts.add(String(e), "error");
-      throw e;
     }
   }
 
   async function handleDeleteKey() {
     if (!active || !selectedKey) return;
-    try {
-      await invoke("delete_key", {
-        connectionId: active.id,
-        key: selectedKey,
-      });
-      openTabs.splice(activeTabIndex, 1);
-      if (activeTabIndex >= openTabs.length) {
-        activeTabIndex = Math.max(0, openTabs.length - 1);
-      }
+    const ok = await deleteKeyAction(active, selectedKey);
+    if (ok) {
+      applyTabResult(closeTabAt(openTabs, activeTabIndex, activeTabIndex));
       deletingKey = false;
-    } catch (e) {
-      toasts.add(String(e), "error");
     }
   }
 
   async function handleRefreshKey() {
-    if (!active || !selectedKey) return;
-    try {
-      const typeStr = await invoke<string>("get_key_type", {
-        connectionId: active.id,
-        key: selectedKey,
-      });
-      const ttlVal = await invoke<number>("get_key_ttl", {
-        connectionId: active.id,
-        key: selectedKey,
-      });
-      openTabs[activeTabIndex].type = typeStr;
-      openTabs[activeTabIndex].ttl = ttlVal;
+    const meta = await refreshKeyMeta(active, selectedKey);
+    if (meta) {
+      openTabs[activeTabIndex].type = meta.type;
+      openTabs[activeTabIndex].ttl = meta.ttl;
       refreshKeyCount++;
-    } catch(e) {
-      toasts.add("Failed to refresh key: " + String(e), "error");
     }
   }
 
   async function changeDb(e: Event) {
     if (!active) return;
     const newDb = Number((e.target as HTMLSelectElement).value);
-    if (active.db === newDb) return;
-    try {
-      const updated = { ...active, db: newDb };
-      await connections.save(updated);
-      await invoke("reconnect", { connectionId: active.id });
-      activeConnection.set(updated);
+    const switched = await switchDatabase(active, newDb, (c) => connections.save(c), (c) => activeConnection.set(c));
+    if (switched) {
       openTabs = [];
       activeTabIndex = 0;
-    } catch (err) {
-      toasts.add(String(err), "error");
     }
   }
 
   function handleKeyAdded(keyName: string) {
     if (!active) return;
-    
     addingKey = false;
     treeRefreshTrigger++;
     handleKeySelect(keyName);
   }
 
   function closeTab(index: number) {
-    openTabs.splice(index, 1);
-    if (activeTabIndex >= openTabs.length) {
-      activeTabIndex = Math.max(0, openTabs.length - 1);
-    } else if (activeTabIndex > index) {
-      activeTabIndex--;
-    }
+    applyTabResult(closeTabAt(openTabs, activeTabIndex, index));
   }
 
   async function copyKeyToClipboard() {

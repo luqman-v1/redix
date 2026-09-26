@@ -15,7 +15,8 @@
   let { connectionId, separator, refreshTrigger = 0, onselect }: Props = $props();
 
   const PAGE_SIZE = 500;
-  const MAX_SCAN_PAGES = 200;
+  const MAX_SCAN_PAGES = 20;
+  const MAX_KEYS = 10000;
   const HISTORY_KEY = "redix_search_history";
 
   let pattern = $state("*");
@@ -23,6 +24,7 @@
   let allKeys = $state<{key: string; ttl: number}[]>([]);
   let displayedCount = $state(0);
   let tree = $state<TreeNode[]>([]);
+  let expandedPaths = $state<Set<string>>(new Set());
   let keyCount = $state(0);
   let error = $state<string | null>(null);
   let searchHistory = $state<string[]>([]);
@@ -69,26 +71,30 @@
   }
 
   let isMounted = false;
+  let nowTick = $state(0);
 
   onMount(() => {
     isMounted = true;
     loadSearchHistory();
-    return () => { isMounted = false; };
+    const interval = setInterval(() => { nowTick++; }, 1000);
+    return () => { isMounted = false; clearInterval(interval); };
   });
 
   function updateTree() {
     const slice = allKeys.slice(0, displayedCount);
     keyCount = allKeys.length;
     tree = buildTree(slice, separator);
+    if (tree.length <= 8) expandedPaths = new Set(tree.map((n) => n.path));
   }
 
-  function loadMore() {
-    displayedCount = Math.min(displayedCount + PAGE_SIZE, allKeys.length);
-    updateTree();
+  function toggleNode(path: string) {
+    const next = new Set(expandedPaths);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    expandedPaths = next;
   }
 
   let currentCursor = $state(0);
-
   async function scanKeys(reset = true) {
     if (loading) return;
     loading = true;
@@ -111,13 +117,11 @@
       let iterations = 0;
       
       const isWildcard = pattern.includes('*') || pattern.includes('?') || pattern.includes('[');
-      
       if (!isWildcard && pattern) {
-        // exact match fallback
-        const type = await invoke<string>("get_key_type", { connectionId, key: pattern });
-        if (type !== "none") {
-          const ttl = await invoke<number>("get_key_ttl", { connectionId, key: pattern });
-          newKeys.push({ key: pattern, ttl });
+        // exact match fallback: single round-trip for type+ttl
+        const meta = await invoke<{ type: string; ttl: number }>("get_key_meta", { connectionId, key: pattern });
+        if (meta.type !== "none") {
+          newKeys.push({ key: pattern, ttl: meta.ttl });
         }
         c = 0;
       } else {
@@ -145,7 +149,7 @@
       const keyMap = new Map();
       for (const item of allKeys) keyMap.set(item.key, item);
       for (const item of newKeys) keyMap.set(item.key, item);
-      allKeys = Array.from(keyMap.values());
+      allKeys = Array.from(keyMap.values()).slice(0, MAX_KEYS);
       displayedCount = allKeys.length;
       updateTree();
     } catch (e) {
@@ -227,17 +231,19 @@
     {:else}
       <div class="tree-list">
         {#each tree as node (node.path)}
-          <TreeNodeComponent {node} depth={0} {onselect} />
+          <TreeNodeComponent {node} depth={0} {onselect} {expandedPaths} ontoggle={toggleNode} now={nowTick} />
         {/each}
       </div>
       {#if keyCount > 0 || currentCursor !== 0}
         <div class="key-count">
           Showing {displayedCount} keys
-          {#if currentCursor === 0}
-             (All loaded)
+          {#if allKeys.length >= MAX_KEYS && currentCursor !== 0}
+            (capped at {MAX_KEYS} — refine pattern)
+          {:else if currentCursor === 0}
+            (All loaded)
           {/if}
         </div>
-        {#if currentCursor !== 0}
+        {#if currentCursor !== 0 && allKeys.length < MAX_KEYS}
           <button class="load-more-btn" onclick={() => scanKeys(false)} disabled={loading}>
             {loading ? 'Scanning DB...' : 'Scan More Keys'}
           </button>
