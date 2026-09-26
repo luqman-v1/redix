@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use serde::Serialize;
-use tauri::State;
 use crate::redis::types::RedisValue;
+use serde::Serialize;
+use std::sync::Arc;
+use tauri::State;
 
 use super::keys::ConnectionManager;
 
@@ -120,9 +120,7 @@ pub async fn reset_slow_logs(
         )
     };
 
-    client
-        .execute("SLOWLOG", vec!["RESET".to_string()])
-        .await?;
-    
+    client.execute("SLOWLOG", vec!["RESET".to_string()]).await?;
+
     Ok(())
 }

@@ -2,9 +2,9 @@ use serde::Serialize;
 use tauri::State;
 
 use super::keys::ConnectionManager;
+use crate::redis::client::RedisClient;
 use crate::redis::types::RedisValue;
 use std::sync::Arc;
-use crate::redis::client::RedisClient;
 
 #[derive(Serialize)]
 pub struct StreamEntry {
@@ -79,10 +79,9 @@ async fn get_client(
     connection_id: &str,
 ) -> Result<Arc<dyn RedisClient>, String> {
     let map = manager.lock().await;
-    Ok(Arc::clone(
-        map.get(connection_id)
-            .ok_or_else(|| format!("connection '{}' not found", connection_id))?,
-    ))
+    Ok(Arc::clone(map.get(connection_id).ok_or_else(|| {
+        format!("connection '{}' not found", connection_id)
+    })?))
 }
 
 // --- String commands ---
@@ -287,7 +286,12 @@ pub async fn get_sorted_set_range(
     let val = client
         .execute(
             "ZRANGE",
-            vec![key, start.to_string(), stop.to_string(), "WITHSCORES".into()],
+            vec![
+                key,
+                start.to_string(),
+                stop.to_string(),
+                "WITHSCORES".into(),
+            ],
         )
         .await?;
     match val {
@@ -356,13 +360,7 @@ pub async fn get_stream_range(
 ) -> Result<Vec<StreamEntry>, String> {
     let client = get_client(&manager, &connection_id).await?;
     let args = if count > 0 {
-        vec![
-            key,
-            start,
-            end,
-            "COUNT".into(),
-            count.to_string(),
-        ]
+        vec![key, start, end, "COUNT".into(), count.to_string()]
     } else {
         vec![key, start, end]
     };
@@ -440,7 +438,12 @@ pub async fn get_geo_members(
     manager: State<'_, ConnectionManager>,
 ) -> Result<Vec<GeoMember>, String> {
     let client = get_client(&manager, &connection_id).await?;
-    let members_val = client.execute("ZRANGE", vec![key.clone(), "0".into(), "-1".into(), "WITHSCORES".into()]).await?;
+    let members_val = client
+        .execute(
+            "ZRANGE",
+            vec![key.clone(), "0".into(), "-1".into(), "WITHSCORES".into()],
+        )
+        .await?;
     let members_with_scores = match members_val {
         RedisValue::Array(arr) => {
             let mut result = Vec::with_capacity(arr.len() / 2);
@@ -492,10 +495,20 @@ pub async fn get_geo_members(
                             RedisValue::Float(f) => *f,
                             _ => 0.0,
                         };
-                        result.push(GeoMember { member, longitude: lon, latitude: lat, score });
+                        result.push(GeoMember {
+                            member,
+                            longitude: lon,
+                            latitude: lat,
+                            score,
+                        });
                     }
                     RedisValue::Nil => {
-                        result.push(GeoMember { member, longitude: 0.0, latitude: 0.0, score });
+                        result.push(GeoMember {
+                            member,
+                            longitude: 0.0,
+                            latitude: 0.0,
+                            score,
+                        });
                     }
                     _ => {}
                 }

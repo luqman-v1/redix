@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tauri::State;
+use tokio::sync::Mutex;
 
 pub type HistoryStore = Arc<Mutex<HashMap<String, Vec<String>>>>;
 

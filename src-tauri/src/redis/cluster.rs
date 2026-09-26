@@ -6,8 +6,8 @@ use crate::config::ConnectionConfig;
 use crate::redis::tls::build_tls_certificates;
 
 use super::client::RedisClient;
-use super::types::RedisValue;
 use super::standalone::{convert_value, redis_value_to_string};
+use super::types::RedisValue;
 
 /// Redis Cluster client backed by a cluster connection.
 pub struct ClusterClient {
@@ -19,31 +19,15 @@ pub struct ClusterClient {
 
 impl ClusterClient {
     pub fn new(config: ConnectionConfig) -> Self {
-        Self { config, conn: None, fallback_conn: tokio::sync::Mutex::new(None) }
+        Self {
+            config,
+            conn: None,
+            fallback_conn: tokio::sync::Mutex::new(None),
+        }
     }
 
     fn build_urls(&self) -> Vec<String> {
-        let use_ssl = self.config.use_ssl || self.config.ssl.is_some();
-        let scheme = if use_ssl { "rediss://" } else { "redis://" };
-        let mut url = String::from(scheme);
-
-        match (&self.config.username, &self.config.password) {
-            (Some(user), Some(pass)) => {
-                url.push_str(&format!("{}:{}@", user, pass));
-            }
-            (None, Some(pass)) => {
-                url.push_str(&format!(":{}@", pass));
-            }
-            _ => {}
-        }
-
-        url.push_str(&format!("{}:{}", self.config.host, self.config.port));
-        if let Some(ssl) = &self.config.ssl {
-            if ssl.skip_verify {
-                url.push_str("#insecure");
-            }
-        }
-        vec![url]
+        vec![crate::redis::build_redis_url(&self.config, false)]
     }
 }
 
@@ -55,7 +39,7 @@ impl RedisClient for ClusterClient {
         if self.config.readonly {
             builder = builder.read_from_replicas();
         }
-        
+
         let use_ssl = self.config.use_ssl || self.config.ssl.is_some();
         if use_ssl {
             let certs = build_tls_certificates(&self.config)?;
@@ -89,12 +73,7 @@ impl RedisClient for ClusterClient {
     }
 
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String> {
-        if self.config.readonly {
-            let upper_cmd = cmd.to_uppercase();
-            if crate::redis::UNSAFE_CMDS.contains(&upper_cmd.as_str()) {
-                return Err("Connection is in Read-Only mode".into());
-            }
-        }
+        crate::redis::ensure_writable(self.config.readonly, cmd)?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut redis_cmd = redis::cmd(cmd);
@@ -102,7 +81,7 @@ impl RedisClient for ClusterClient {
         for arg in &args {
             redis_cmd.arg(arg);
         }
-        
+
         // Intercept cluster-wide or keyless commands that cluster_async struggles with
         if upper_cmd == "INFO" || upper_cmd == "DBSIZE" {
             let mut fb_guard = self.fallback_conn.lock().await;
@@ -132,7 +111,11 @@ impl RedisClient for ClusterClient {
         Ok(convert_value(value))
     }
 
-    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String> {
+    async fn execute_pipeline(
+        &self,
+        cmds: Vec<(String, Vec<String>)>,
+    ) -> Result<Vec<RedisValue>, String> {
+        crate::redis::ensure_pipeline_writable(self.config.readonly, &cmds)?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut pipe = redis::pipe();
@@ -213,9 +196,7 @@ impl RedisClient for ClusterClient {
     }
 
     async fn del(&self, keys: Vec<&str>) -> Result<i64, String> {
-        if self.config.readonly {
-            return Err("Connection is in Read-Only mode".into());
-        }
+        crate::redis::ensure_writable(self.config.readonly, "DEL")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut cmd = redis::cmd("DEL");
@@ -230,9 +211,7 @@ impl RedisClient for ClusterClient {
     }
 
     async fn rename(&self, old: &str, new: &str) -> Result<(), String> {
-        if self.config.readonly {
-            return Err("Connection is in Read-Only mode".into());
-        }
+        crate::redis::ensure_writable(self.config.readonly, "RENAME")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let _: Value = redis::cmd("RENAME")
@@ -245,9 +224,7 @@ impl RedisClient for ClusterClient {
     }
 
     async fn set_ttl(&self, key: &str, seconds: u64) -> Result<bool, String> {
-        if self.config.readonly {
-            return Err("Connection is in Read-Only mode".into());
-        }
+        crate::redis::ensure_writable(self.config.readonly, "EXPIRE")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("EXPIRE")
@@ -260,9 +237,7 @@ impl RedisClient for ClusterClient {
     }
 
     async fn persist(&self, key: &str) -> Result<bool, String> {
-        if self.config.readonly {
-            return Err("Connection is in Read-Only mode".into());
-        }
+        crate::redis::ensure_writable(self.config.readonly, "PERSIST")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("PERSIST")

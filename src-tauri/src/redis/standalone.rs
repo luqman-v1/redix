@@ -20,26 +20,7 @@ impl StandaloneClient {
 }
 
 fn build_url(config: &ConnectionConfig) -> String {
-    let scheme = if config.use_ssl { "rediss://" } else { "redis://" };
-    let mut url = String::from(scheme);
-
-    match (&config.username, &config.password) {
-        (Some(user), Some(pass)) => {
-            url.push_str(&format!("{}:{}@", user, pass));
-        }
-        (None, Some(pass)) => {
-            url.push_str(&format!(":{}@", pass));
-        }
-        _ => {}
-    }
-
-    url.push_str(&format!("{}:{}/{}", config.host, config.port, config.db));
-    if let Some(ssl) = &config.ssl {
-        if ssl.skip_verify {
-            url.push_str("#insecure");
-        }
-    }
-    url
+    crate::redis::build_redis_url(config, true)
 }
 
 pub fn convert_value(value: Value) -> RedisValue {
@@ -64,8 +45,9 @@ pub fn convert_value(value: Value) -> RedisValue {
 
 pub fn redis_value_to_string(val: Value) -> Result<String, String> {
     match val {
-        Value::BulkString(bytes) => String::from_utf8(bytes)
-            .map_err(|e| format!("invalid utf-8: {}", e)),
+        Value::BulkString(bytes) => {
+            String::from_utf8(bytes).map_err(|e| format!("invalid utf-8: {}", e))
+        }
         Value::SimpleString(s) => Ok(s),
         Value::Okay => Ok("OK".to_string()),
         Value::Int(n) => Ok(n.to_string()),
@@ -77,11 +59,14 @@ pub fn redis_value_to_string(val: Value) -> Result<String, String> {
 impl RedisClient for StandaloneClient {
     async fn connect(&mut self) -> Result<(), String> {
         let url = build_url(&self.config);
-        
+
         let client = if self.config.use_ssl {
             let certs = build_tls_certificates(&self.config)?;
-            let info = url.into_connection_info().map_err(|e| format!("invalid url: {}", e))?;
-            Client::build_with_tls(info, certs).map_err(|e| format!("client creation failed: {}", e))?
+            let info = url
+                .into_connection_info()
+                .map_err(|e| format!("invalid url: {}", e))?;
+            Client::build_with_tls(info, certs)
+                .map_err(|e| format!("client creation failed: {}", e))?
         } else {
             Client::open(url).map_err(|e| format!("client creation failed: {}", e))?
         };
@@ -110,12 +95,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String> {
-        if self.config.readonly {
-            let upper_cmd = cmd.to_uppercase();
-            if crate::redis::UNSAFE_CMDS.contains(&upper_cmd.as_str()) {
-                return Err("Connection is in Read-Only mode".into());
-            }
-        }
+        crate::redis::ensure_writable(self.config.readonly, cmd)?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut redis_cmd = redis::cmd(cmd);
@@ -129,7 +109,11 @@ impl RedisClient for StandaloneClient {
         Ok(convert_value(value))
     }
 
-    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String> {
+    async fn execute_pipeline(
+        &self,
+        cmds: Vec<(String, Vec<String>)>,
+    ) -> Result<Vec<RedisValue>, String> {
+        crate::redis::ensure_pipeline_writable(self.config.readonly, &cmds)?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut pipe = redis::pipe();
@@ -210,7 +194,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn del(&self, keys: Vec<&str>) -> Result<i64, String> {
-        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
+        crate::redis::ensure_writable(self.config.readonly, "DEL")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let mut cmd = redis::cmd("DEL");
@@ -225,7 +209,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn rename(&self, old: &str, new: &str) -> Result<(), String> {
-        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
+        crate::redis::ensure_writable(self.config.readonly, "RENAME")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let _: Value = redis::cmd("RENAME")
@@ -238,7 +222,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn set_ttl(&self, key: &str, seconds: u64) -> Result<bool, String> {
-        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
+        crate::redis::ensure_writable(self.config.readonly, "EXPIRE")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("EXPIRE")
@@ -251,7 +235,7 @@ impl RedisClient for StandaloneClient {
     }
 
     async fn persist(&self, key: &str) -> Result<bool, String> {
-        if self.config.readonly { return Err("Connection is in Read-Only mode".into()); }
+        crate::redis::ensure_writable(self.config.readonly, "PERSIST")?;
         let conn = self.conn.as_ref().ok_or("not connected")?;
         let mut conn = conn.clone();
         let result: i64 = redis::cmd("PERSIST")

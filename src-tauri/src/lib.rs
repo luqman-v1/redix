@@ -3,17 +3,14 @@ pub mod config;
 pub mod redis;
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
-use once_cell::sync::OnceCell;
 
-
-pub static APP_HANDLE: OnceCell<tauri::AppHandle> = OnceCell::new();
+pub static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     tauri::Builder::default()
         .setup(|app| {
@@ -22,7 +19,6 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_opener::init())
         .manage(config::ConnectionStore::default())
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::keys::ConnectionManager)
         .manage(Arc::new(Mutex::new(HashMap::new())) as commands::history::HistoryStore)
@@ -38,6 +34,7 @@ pub fn run() {
             commands::connections::disconnect_server,
             commands::connections::get_server_info,
             commands::keys::scan_keys,
+            commands::keys::get_key_meta,
             commands::keys::get_key_type,
             commands::keys::get_key_ttl,
             commands::keys::set_key_ttl,

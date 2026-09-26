@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use serde::Serialize;
+use std::sync::Arc;
 use tauri::State;
 
 use super::keys::ConnectionManager;
@@ -23,6 +23,10 @@ pub async fn analyze_memory(
     sample_size: usize,
     manager: State<'_, ConnectionManager>,
 ) -> Result<MemoryAnalysisResult, String> {
+    const MAX_SAMPLE_SIZE: usize = 50_000;
+    const SCAN_COUNT: u64 = 1000;
+    const CHUNK_SIZE: usize = 200;
+    let sample_size = sample_size.clamp(1, MAX_SAMPLE_SIZE);
     let client = {
         let map = manager.lock().await;
         Arc::clone(
@@ -36,7 +40,7 @@ pub async fn analyze_memory(
 
     // Scan up to sample_size
     loop {
-        let (next_cursor, keys) = client.scan_keys(cursor, 1000, None).await?;
+        let (next_cursor, keys) = client.scan_keys(cursor, SCAN_COUNT, None).await?;
         for k in keys {
             scanned_keys.push(k);
         }
@@ -53,7 +57,7 @@ pub async fn analyze_memory(
     let mut results = Vec::with_capacity(scanned_keys.len());
 
     // Process in chunks to avoid overwhelming the connection
-    for chunk in scanned_keys.chunks(500) {
+    for chunk in scanned_keys.chunks(CHUNK_SIZE) {
         let mut cmds = Vec::with_capacity(chunk.len() * 2);
         for key in chunk {
             cmds.push(("MEMORY".to_string(), vec!["USAGE".to_string(), key.clone()]));
@@ -69,14 +73,14 @@ pub async fn analyze_memory(
                         _ => 0,
                     };
                     i += 1;
-                    
+
                     let key_type = match values.get(i) {
                         Some(crate::redis::types::RedisValue::Status(s)) => s.clone(),
                         Some(crate::redis::types::RedisValue::String(s)) => s.clone(),
                         _ => "unknown".to_string(),
                     };
                     i += 1;
-                    
+
                     results.push(MemoryKeyInfo {
                         key: key.clone(),
                         bytes,
@@ -86,7 +90,7 @@ pub async fn analyze_memory(
             }
             Err(e) => {
                 // If pipeline fails for a chunk, skip this chunk
-                eprintln!("Pipeline error analyzing memory: {}", e);
+                log::error!("Pipeline error analyzing memory: {}", e);
             }
         }
     }

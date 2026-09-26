@@ -64,9 +64,10 @@ pub async fn execute_command(
 ) -> Result<CommandResult, String> {
     let client = {
         let map = manager.lock().await;
-        std::sync::Arc::clone(map
-            .get(&connection_id)
-            .ok_or_else(|| format!("connection '{}' not found", connection_id))?)
+        std::sync::Arc::clone(
+            map.get(&connection_id)
+                .ok_or_else(|| format!("connection '{}' not found", connection_id))?,
+        )
     };
     let parts = parse_command(&command);
     if parts.is_empty() {
@@ -77,5 +78,8 @@ pub async fn execute_command(
     let start = std::time::Instant::now();
     let result = client.execute(cmd, args).await.map_err(|e| e.to_string())?;
     let duration_ms = start.elapsed().as_millis() as u64;
-    Ok(CommandResult { result, duration_ms })
+    Ok(CommandResult {
+        result,
+        duration_ms,
+    })
 }

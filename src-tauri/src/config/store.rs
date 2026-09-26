@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, RwLock};
 
 use log::{error, info};
 
@@ -18,7 +19,7 @@ const NONCE_LEN: usize = 12;
 const KEY_LEN: usize = 32;
 const FILE_NAME: &str = "connections.enc";
 
-fn derive_key() -> Vec<u8> {
+static CACHED_KEY: LazyLock<Vec<u8>> = LazyLock::new(|| {
     // ponytail: must match old whoami::hostname() behavior exactly (unwrap_or_default)
     // or existing encrypted connections.enc files become unreadable
     let password = format!("redix-{}", whoami::fallible::hostname().unwrap_or_default());
@@ -26,25 +27,39 @@ fn derive_key() -> Vec<u8> {
     let mut key = vec![0u8; KEY_LEN];
     pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, PBKDF2_ITERATIONS, &mut key);
     key
-}
+});
 
 pub struct ConnectionStore {
     path: PathBuf,
     cipher: Aes256Gcm,
+    cache: RwLock<Option<Vec<ConnectionConfig>>>,
 }
 
 impl ConnectionStore {
     pub fn new(config_dir: &Path) -> Self {
         fs::create_dir_all(config_dir).expect("failed to create config directory");
-        let key = derive_key();
-        let cipher = Aes256Gcm::new_from_slice(&key).expect("failed to create cipher");
+        let cipher = Aes256Gcm::new_from_slice(&CACHED_KEY).expect("failed to create cipher");
         Self {
             path: config_dir.join(FILE_NAME),
             cipher,
+            cache: RwLock::new(None),
         }
     }
 
     pub fn load(&self) -> Result<Vec<ConnectionConfig>, String> {
+        if let Ok(guard) = self.cache.read() {
+            if let Some(cached) = guard.as_ref() {
+                return Ok(cached.clone());
+            }
+        }
+        let result = self.load_from_disk()?;
+        if let Ok(mut guard) = self.cache.write() {
+            *guard = Some(result.clone());
+        }
+        Ok(result)
+    }
+
+    fn load_from_disk(&self) -> Result<Vec<ConnectionConfig>, String> {
         info!("Loading connections from {:?}", self.path);
         let data = match fs::read(&self.path) {
             Ok(d) => d,
@@ -58,7 +73,10 @@ impl ConnectionStore {
             }
         };
         if data.len() < NONCE_LEN {
-            error!("Store file too short ({} bytes), backing up and starting fresh", data.len());
+            error!(
+                "Store file too short ({} bytes), backing up and starting fresh",
+                data.len()
+            );
             self.backup_corrupt_file();
             return Ok(vec![]);
         }
@@ -75,7 +93,10 @@ impl ConnectionStore {
         let result: Vec<ConnectionConfig> = match serde_json::from_slice(&plaintext) {
             Ok(r) => r,
             Err(e) => {
-                error!("Deserialization failed: {}. Backing up corrupt file and starting fresh.", e);
+                error!(
+                    "Deserialization failed: {}. Backing up corrupt file and starting fresh.",
+                    e
+                );
                 self.backup_corrupt_file();
                 return Ok(vec![]);
             }
@@ -93,12 +114,15 @@ impl ConnectionStore {
     }
 
     pub fn save(&self, connections: &[ConnectionConfig]) -> Result<(), String> {
-        info!("Saving {} connections to {:?}", connections.len(), self.path);
-        let plaintext =
-            serde_json::to_vec(connections).map_err(|e| {
-                error!("Serialization failed: {}", e);
-                format!("serialization failed: {}", e)
-            })?;
+        info!(
+            "Saving {} connections to {:?}",
+            connections.len(),
+            self.path
+        );
+        let plaintext = serde_json::to_vec(connections).map_err(|e| {
+            error!("Serialization failed: {}", e);
+            format!("serialization failed: {}", e)
+        })?;
         let mut nonce_bytes = [0u8; NONCE_LEN];
         OsRng.fill_bytes(&mut nonce_bytes);
         let nonce = Nonce::from_slice(&nonce_bytes);
@@ -118,6 +142,9 @@ impl ConnectionStore {
             error!("Failed to write store: {}", e);
             format!("failed to write store: {}", e)
         })?;
+        if let Ok(mut guard) = self.cache.write() {
+            *guard = Some(connections.to_vec());
+        }
         info!("Store saved successfully ({} bytes)", output.len());
         Ok(())
     }

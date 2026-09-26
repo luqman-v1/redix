@@ -18,7 +18,10 @@ pub trait RedisClient: Send + Sync {
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String>;
 
     /// Execute a pipeline of commands.
-    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String>;
+    async fn execute_pipeline(
+        &self,
+        cmds: Vec<(String, Vec<String>)>,
+    ) -> Result<Vec<RedisValue>, String>;
 
     /// Scan keys using cursor-based pagination.
     /// Returns (next_cursor, keys).
@@ -51,12 +54,17 @@ pub trait RedisClient: Send + Sync {
 /// Create a Redis client instance matching the specified connection type (Standalone, Cluster, Sentinel).
 pub fn create_client(config: crate::config::ConnectionConfig) -> Box<dyn RedisClient> {
     match config.connection_type {
-        crate::config::ConnectionType::Standalone => Box::new(super::standalone::StandaloneClient::new(config)),
-        crate::config::ConnectionType::Cluster => Box::new(super::cluster::ClusterClient::new(config)),
-        crate::config::ConnectionType::Sentinel => Box::new(super::sentinel::SentinelClient::new(config)),
+        crate::config::ConnectionType::Standalone => {
+            Box::new(super::standalone::StandaloneClient::new(config))
+        }
+        crate::config::ConnectionType::Cluster => {
+            Box::new(super::cluster::ClusterClient::new(config))
+        }
+        crate::config::ConnectionType::Sentinel => {
+            Box::new(super::sentinel::SentinelClient::new(config))
+        }
     }
 }
-
 
 /// A wrapper client that logs all command executions
 pub struct LoggingClient {
@@ -81,10 +89,12 @@ impl RedisClient for LoggingClient {
     }
 
     async fn execute(&self, cmd: &str, args: Vec<String>) -> Result<RedisValue, String> {
+        if crate::redis::is_quiet_command(cmd) {
+            return self.inner.execute(cmd, args).await;
+        }
         let start = std::time::Instant::now();
         let res = self.inner.execute(cmd, args.clone()).await;
         let duration = start.elapsed().as_millis() as u64;
-        
         let args_str = args.join(" ");
         let full_cmd = if args_str.is_empty() {
             cmd.to_string()
@@ -95,7 +105,10 @@ impl RedisClient for LoggingClient {
         res
     }
 
-    async fn execute_pipeline(&self, cmds: Vec<(String, Vec<String>)>) -> Result<Vec<RedisValue>, String> {
+    async fn execute_pipeline(
+        &self,
+        cmds: Vec<(String, Vec<String>)>,
+    ) -> Result<Vec<RedisValue>, String> {
         let start = std::time::Instant::now();
         let cmd_count = cmds.len();
         let res = self.inner.execute_pipeline(cmds).await;
@@ -113,7 +126,7 @@ impl RedisClient for LoggingClient {
         let start = std::time::Instant::now();
         let res = self.inner.scan_keys(cursor, count, pattern).await;
         let duration = start.elapsed().as_millis() as u64;
-        
+
         let mut full_cmd = format!("SCAN {} COUNT {}", cursor, count);
         if let Some(p) = pattern {
             full_cmd.push_str(&format!(" MATCH {}", p));
@@ -125,7 +138,10 @@ impl RedisClient for LoggingClient {
     async fn get_type(&self, key: &str) -> Result<String, String> {
         let start = std::time::Instant::now();
         let res = self.inner.get_type(key).await;
-        crate::redis::emit_command_log(&format!("TYPE {}", key), start.elapsed().as_millis() as u64);
+        crate::redis::emit_command_log(
+            &format!("TYPE {}", key),
+            start.elapsed().as_millis() as u64,
+        );
         res
     }
 
@@ -139,28 +155,40 @@ impl RedisClient for LoggingClient {
     async fn del(&self, keys: Vec<&str>) -> Result<i64, String> {
         let start = std::time::Instant::now();
         let res = self.inner.del(keys.clone()).await;
-        crate::redis::emit_command_log(&format!("DEL {}", keys.join(" ")), start.elapsed().as_millis() as u64);
+        crate::redis::emit_command_log(
+            &format!("DEL {}", keys.join(" ")),
+            start.elapsed().as_millis() as u64,
+        );
         res
     }
 
     async fn rename(&self, old: &str, new: &str) -> Result<(), String> {
         let start = std::time::Instant::now();
         let res = self.inner.rename(old, new).await;
-        crate::redis::emit_command_log(&format!("RENAME {} {}", old, new), start.elapsed().as_millis() as u64);
+        crate::redis::emit_command_log(
+            &format!("RENAME {} {}", old, new),
+            start.elapsed().as_millis() as u64,
+        );
         res
     }
 
     async fn set_ttl(&self, key: &str, seconds: u64) -> Result<bool, String> {
         let start = std::time::Instant::now();
         let res = self.inner.set_ttl(key, seconds).await;
-        crate::redis::emit_command_log(&format!("EXPIRE {} {}", key, seconds), start.elapsed().as_millis() as u64);
+        crate::redis::emit_command_log(
+            &format!("EXPIRE {} {}", key, seconds),
+            start.elapsed().as_millis() as u64,
+        );
         res
     }
 
     async fn persist(&self, key: &str) -> Result<bool, String> {
         let start = std::time::Instant::now();
         let res = self.inner.persist(key).await;
-        crate::redis::emit_command_log(&format!("PERSIST {}", key), start.elapsed().as_millis() as u64);
+        crate::redis::emit_command_log(
+            &format!("PERSIST {}", key),
+            start.elapsed().as_millis() as u64,
+        );
         res
     }
 }
@@ -267,12 +295,21 @@ mod tests {
     #[test]
     fn test_redis_value_to_display_string() {
         assert_eq!(RedisValue::Nil.to_display_string(), "(nil)");
-        assert_eq!(RedisValue::String("".to_string()).to_display_string(), "\"\"");
+        assert_eq!(
+            RedisValue::String("".to_string()).to_display_string(),
+            "\"\""
+        );
         assert_eq!(RedisValue::Integer(-1).to_display_string(), "-1");
         assert_eq!(RedisValue::Float(0.0).to_display_string(), "0");
         assert_eq!(RedisValue::Bool(false).to_display_string(), "false");
-        assert_eq!(RedisValue::Status("PONG".to_string()).to_display_string(), "PONG");
-        assert_eq!(RedisValue::Error("ERR msg".to_string()).to_display_string(), "(error) ERR msg");
+        assert_eq!(
+            RedisValue::Status("PONG".to_string()).to_display_string(),
+            "PONG"
+        );
+        assert_eq!(
+            RedisValue::Error("ERR msg".to_string()).to_display_string(),
+            "(error) ERR msg"
+        );
         assert_eq!(RedisValue::Array(vec![]).to_display_string(), "[]");
         assert_eq!(
             RedisValue::Array(vec![RedisValue::Nil, RedisValue::Integer(1)]).to_display_string(),

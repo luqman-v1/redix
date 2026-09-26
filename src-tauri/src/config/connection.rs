@@ -20,7 +20,10 @@ impl Default for ConnectionType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SshAuth {
-    KeyFile { path: String, passphrase: Option<String> },
+    KeyFile {
+        path: String,
+        passphrase: Option<String>,
+    },
     Password(String),
 }
 
@@ -157,9 +160,9 @@ mod tests {
             host: "bastion.example.com".to_string(),
             port: 22,
             username: "admin".to_string(),
-            auth: SshAuth::KeyFile { 
-                path: "/home/admin/.ssh/id_rsa".to_string(), 
-                passphrase: None 
+            auth: SshAuth::KeyFile {
+                path: "/home/admin/.ssh/id_rsa".to_string(),
+                passphrase: None,
             },
         };
         let mut config = ConnectionConfig::new("tunnel", "127.0.0.1", 6379);
@@ -200,9 +203,18 @@ mod tests {
             assert_eq!(*ct, deserialized);
         }
 
-        assert_eq!(serde_json::to_string(&ConnectionType::Standalone).unwrap(), "\"standalone\"");
-        assert_eq!(serde_json::to_string(&ConnectionType::Cluster).unwrap(), "\"cluster\"");
-        assert_eq!(serde_json::to_string(&ConnectionType::Sentinel).unwrap(), "\"sentinel\"");
+        assert_eq!(
+            serde_json::to_string(&ConnectionType::Standalone).unwrap(),
+            "\"standalone\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ConnectionType::Cluster).unwrap(),
+            "\"cluster\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ConnectionType::Sentinel).unwrap(),
+            "\"sentinel\""
+        );
     }
 
     #[test]

@@ -1,9 +1,9 @@
-use tauri::{AppHandle, Emitter};
 use futures_util::stream::StreamExt;
+use std::collections::HashMap;
 use std::sync::Arc;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use std::collections::HashMap;
 
 use crate::config::connection::ConnectionConfig;
 use crate::redis::tls::build_tls_certificates;
@@ -28,30 +28,19 @@ pub async fn subscribe_channel(
     let app_clone = app.clone();
     let event_name = format!("pubsub-{}", sub_id);
 
+    let url = crate::redis::build_redis_url(&config, false);
     let use_ssl = config.use_ssl || config.ssl.is_some();
-    let scheme = if use_ssl { "rediss://" } else { "redis://" };
-    let mut url = String::from(scheme);
-    match (&config.username, &config.password) {
-        (Some(u), Some(p)) => url.push_str(&format!("{}:{}@", u, p)),
-        (None, Some(p)) => url.push_str(&format!(":{}@", p)),
-        _ => {}
-    }
-    url.push_str(&format!("{}:{}", config.host, config.port));
-    if let Some(ssl) = &config.ssl {
-        if ssl.skip_verify {
-            url.push_str("#insecure");
-        }
-    }
-
     use crate::config::connection::ConnectionType;
-    use redis::IntoConnectionInfo;
     use redis::sentinel::Sentinel;
-
+    use redis::IntoConnectionInfo;
     let client = if config.connection_type == ConnectionType::Sentinel {
         let info = url.into_connection_info().map_err(|e| e.to_string())?;
         let mut sentinel = Sentinel::build(vec![info]).map_err(|e| e.to_string())?;
         let master = config.sentinel_master_name.as_deref().unwrap_or("mymaster");
-        sentinel.async_master_for(master, None).await.map_err(|e| e.to_string())?
+        sentinel
+            .async_master_for(master, None)
+            .await
+            .map_err(|e| e.to_string())?
     } else if use_ssl {
         let certs = build_tls_certificates(&config)?;
         redis::Client::build_with_tls(url, certs).map_err(|e| e.to_string())?
@@ -69,10 +58,13 @@ pub async fn subscribe_channel(
                     let mut stream = pubsub.on_message();
                     while let Some(msg) = stream.next().await {
                         if let Ok(payload) = msg.get_payload::<String>() {
-                            let _ = app_clone.emit(&event_name, PubSubMessage {
-                                channel: msg.get_channel_name().to_string(),
-                                payload,
-                            });
+                            let _ = app_clone.emit(
+                                &event_name,
+                                PubSubMessage {
+                                    channel: msg.get_channel_name().to_string(),
+                                    payload,
+                                },
+                            );
                         }
                     }
                 } else {
