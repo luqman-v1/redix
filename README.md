@@ -13,9 +13,9 @@
 
 ## 📸 Screenshots
 
-<img src="img/1.png" alt="Redix Screenshot 1" width="600" />
+<img src="img/1.webp" alt="Redix Screenshot 1" width="600" />
 
-<img src="img/2.png" alt="Redix Screenshot 2" width="600" />
+<img src="img/2.webp" alt="Redix Screenshot 2" width="600" />
 
 ## ✨ Features
 
@@ -39,7 +39,7 @@ Redix comes loaded with enterprise-grade features out of the box. Check out our 
 
 - **Frontend:** [Svelte 5](https://svelte.dev/) + [Vite](https://vitejs.dev/)
 - **Backend / Desktop Bridge:** [Tauri v2](https://tauri.app/) + [Rust](https://www.rust-lang.org/)
-- **Package Manager:** [pnpm](https://pnpm.io/)
+- **Package Manager:** [Bun](https://bun.sh/)
 
 ## 📦 Download & Install
 
@@ -52,10 +52,9 @@ Check out the [Releases](https://github.com/luqmannulhakim/redix/releases) page 
 If you want to build or contribute to Redix locally, follow these steps:
 
 ### Prerequisites
-1. Install **Node.js** (v20+ recommended)
-2. Install **pnpm**: `npm install -g pnpm`
-3. Install **Rust**: [rustup.rs](https://rustup.rs/)
-4. (Linux only) Install Tauri OS dependencies: `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
+1. Install **Bun**: [bun.sh](https://bun.sh/)
+2. Install **Rust**: [rustup.rs](https://rustup.rs/)
+3. (Linux only) Install Tauri OS dependencies: `sudo apt install libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf`
 
 ### Running the App Locally
 
@@ -66,18 +65,18 @@ If you want to build or contribute to Redix locally, follow these steps:
    ```
 2. Install frontend dependencies:
    ```bash
-   pnpm install
+   bun install
    ```
 3. Run the development server (starts Vite and the Tauri Rust window):
    ```bash
-   pnpm tauri dev
+   bun tauri dev
    ```
 
 ### Building for Production
 
 To build the production installers for your current operating system:
 ```bash
-pnpm tauri build
+bun tauri build
 ```
 *The compiled installers will be available in `src-tauri/target/release/bundle/`.*
 
