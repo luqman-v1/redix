@@ -13,7 +13,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
+        include:
+          - platform: macos-latest
+            args: --bundles dmg,app
+          - platform: ubuntu-22.04
+            args: --bundles deb,appimage
+          - platform: windows-latest
+            args: --bundles msi,nsis
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -26,16 +32,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 9
+          bun-version: latest
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -44,9 +49,6 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: 'src-tauri -> target'
-
-      - name: Install frontend dependencies
-        run: pnpm install
 
       - name: Build and draft release
         uses: tauri-apps/tauri-action@v0
@@ -58,3 +60,4 @@ jobs:
           releaseBody: '🚀 **Redix** automated release. Please see the assets below to download and install this version.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}

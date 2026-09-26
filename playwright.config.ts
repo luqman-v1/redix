@@ -7,7 +7,7 @@ export default defineConfig({
     headless: true,
   },
   webServer: {
-    command: "pnpm dev",
+    command: "bun dev",
     url: "http://localhost:1420",
     reuseExistingServer: true,
     timeout: 120000,
