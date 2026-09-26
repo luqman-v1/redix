@@ -76,3 +76,110 @@ async fn test_scan_keys() {
             .unwrap();
     }
 }
+
+#[tokio::test]
+#[ignore]
+async fn test_ttl_pipeline_matches_per_key_ttl() {
+    let mut client = StandaloneClient::new(test_config());
+    client.connect().await.unwrap();
+
+    // Seed a mix of expiring and persistent keys.
+    client
+        .execute("SET", vec!["pipe:persistent".into(), "a".into()])
+        .await
+        .unwrap();
+    client
+        .execute("SET", vec!["pipe:expiring".into(), "b".into()])
+        .await
+        .unwrap();
+    client
+        .execute("EXPIRE", vec!["pipe:expiring".into(), "120".into()])
+        .await
+        .unwrap();
+
+    let keys = vec![
+        "pipe:persistent".to_string(),
+        "pipe:expiring".to_string(),
+        "pipe:missing".to_string(),
+    ];
+
+    // This is the shape scan_keys uses to replace one TTL call per key.
+    let cmds: Vec<(String, Vec<String>)> = keys
+        .iter()
+        .map(|k| ("TTL".to_string(), vec![k.clone()]))
+        .collect();
+    let pipelined = client.execute_pipeline(cmds).await.unwrap();
+
+    assert_eq!(pipelined.len(), keys.len());
+    for (key, value) in keys.iter().zip(pipelined.iter()) {
+        let from_pipeline = match value {
+            RedisValue::Integer(n) => *n,
+            other => panic!("unexpected pipeline value for {key}: {other:?}"),
+        };
+        let direct = client.get_ttl(key).await.unwrap();
+        assert_eq!(
+            from_pipeline, direct,
+            "pipeline TTL diverged from per-key TTL for {key}"
+        );
+    }
+
+    // -1 is "no expiry", -2 is "missing key"; the caller maps both.
+    assert_eq!(pipelined[0], RedisValue::Integer(-1));
+    assert_eq!(pipelined[2], RedisValue::Integer(-2));
+
+    for key in ["pipe:persistent", "pipe:expiring"] {
+        client.del(vec![key]).await.unwrap();
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_read_only_client_blocks_writes_but_allows_reads() {
+    let mut config = test_config();
+    config.readonly = true;
+    let mut client = StandaloneClient::new(config);
+    client.connect().await.unwrap();
+
+    client
+        .execute("SET", vec!["ro:key".into(), "v".into()])
+        .await
+        .unwrap_err();
+    client.del(vec!["ro:key"]).await.unwrap_err();
+    assert!(client.rename("a", "b").await.is_err());
+    assert!(client.persist("ro:key").await.is_err());
+    assert!(client.set_ttl("ro:key", 60).await.is_err());
+
+    // Reads still have to work, otherwise a read-only connection is useless.
+    assert!(client.get_type("ro:missing").await.is_ok());
+    assert!(client.get_ttl("ro:missing").await.is_ok());
+    assert!(client
+        .execute("GET", vec!["ro:missing".into()])
+        .await
+        .is_ok());
+    assert!(client
+        .execute_pipeline(vec![(
+            "TTL".to_string(),
+            vec!["ro:missing".to_string()]
+        )])
+        .await
+        .is_ok());
+}
+
+#[tokio::test]
+#[ignore]
+async fn test_read_only_client_rejects_unsafe_pipeline() {
+    let mut config = test_config();
+    config.readonly = true;
+    let mut client = StandaloneClient::new(config);
+    client.connect().await.unwrap();
+
+    // A read scan builds a TTL-only pipeline; a mixed batch must be rejected
+    // outright rather than partially applied.
+    client
+        .execute_pipeline(vec![
+            ("TTL".to_string(), vec!["k".to_string()]),
+            ("DEL".to_string(), vec!["k".to_string()]),
+        ])
+        .await
+        .unwrap_err();
+}

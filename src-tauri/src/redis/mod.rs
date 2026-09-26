@@ -88,3 +88,92 @@ pub fn build_redis_url(config: &crate::config::ConnectionConfig, include_db: boo
     }
     url
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ConnectionConfig;
+
+    #[test]
+    fn read_only_rejects_writes_but_allows_reads() {
+        assert!(ensure_writable(true, "SET").is_err());
+        assert!(ensure_writable(true, "del").is_err());
+        assert!(ensure_writable(true, "GET").is_ok());
+        assert!(ensure_writable(true, "SCAN 0 COUNT 10").is_ok());
+    }
+
+    #[test]
+    fn read_only_never_rejects_when_writable() {
+        assert!(ensure_writable(false, "SET").is_ok());
+        assert!(ensure_writable(false, "FLUSHALL").is_ok());
+    }
+
+    #[test]
+    fn read_only_pipeline_rejects_if_any_command_writes() {
+        let safe = vec![
+            ("TTL".to_string(), vec!["a".to_string()]),
+            ("TYPE".to_string(), vec!["a".to_string()]),
+        ];
+        assert!(ensure_pipeline_writable(true, &safe).is_ok());
+
+        let unsafe_batch = vec![
+            ("TTL".to_string(), vec!["a".to_string()]),
+            ("DEL".to_string(), vec!["a".to_string()]),
+        ];
+        assert!(ensure_pipeline_writable(true, &unsafe_batch).is_err());
+        assert!(ensure_pipeline_writable(false, &unsafe_batch).is_ok());
+    }
+
+    #[test]
+    fn quiet_commands_are_filtered_case_insensitively() {
+        assert!(is_quiet_command("PING"));
+        assert!(is_quiet_command("scan 0 count 100"));
+        assert!(is_quiet_command("PIPELINE 500 cmds"));
+        assert!(!is_quiet_command("GET mykey"));
+        assert!(!is_quiet_command("SET mykey value"));
+    }
+
+    #[test]
+    fn url_without_credentials_has_no_auth_segment() {
+        let config = ConnectionConfig::new("plain", "127.0.0.1", 6379);
+        assert_eq!(build_redis_url(&config, true), "redis://127.0.0.1:6379/0");
+        assert_eq!(build_redis_url(&config, false), "redis://127.0.0.1:6379");
+    }
+
+    #[test]
+    fn url_percent_encodes_credentials_with_reserved_characters() {
+        let mut config = ConnectionConfig::new("creds", "127.0.0.1", 6379);
+        config.username = Some("user@corp".to_string());
+        config.password = Some("p@ss:w/rd".to_string());
+
+        let url = build_redis_url(&config, true);
+        assert_eq!(url, "redis://user%40corp:p%40ss%3Aw%2Frd@127.0.0.1:6379/0");
+        // The raw credential must not leak into the authority unescaped.
+        assert!(!url.contains("p@ss"));
+    }
+
+    #[test]
+    fn url_uses_password_only_when_username_absent() {
+        let mut config = ConnectionConfig::new("pw", "127.0.0.1", 6379);
+        config.password = Some("secret".to_string());
+        assert_eq!(build_redis_url(&config, true), "redis://:secret@127.0.0.1:6379/0");
+    }
+
+    #[test]
+    fn url_switches_scheme_and_appends_insecure_for_tls() {
+        let mut config = ConnectionConfig::new("tls", "example.com", 6380);
+        config.use_ssl = true;
+        assert_eq!(build_redis_url(&config, false), "rediss://example.com:6380");
+
+        config.ssl = Some(crate::config::SslConfig {
+            ca_cert: None,
+            client_cert: None,
+            client_key: None,
+            skip_verify: true,
+        });
+        assert_eq!(
+            build_redis_url(&config, false),
+            "rediss://example.com:6380#insecure"
+        );
+    }
+}
