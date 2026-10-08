@@ -34,11 +34,19 @@ check:
 test-e2e:
 	$(BUN) run test:e2e
 
-# Integration tests (requires Docker Redis)
+# Integration tests. Prefers Docker; falls back to a local redis-server on
+# port 6399 when the Docker daemon is unavailable (e.g. Docker Desktop off).
 test-integration:
-	docker compose -f docker-compose.test.yml up -d
-	$(CARGO_ENV) cd src-tauri && cargo test -- --ignored; \
-	docker compose -f docker-compose.test.yml down
+	@if docker info >/dev/null 2>&1; then \
+		docker compose -f docker-compose.test.yml up -d; \
+		$(CARGO_ENV) cd src-tauri && cargo test -- --ignored; \
+		docker compose -f docker-compose.test.yml down; \
+	else \
+		echo "docker unavailable; using a local redis-server on :6399"; \
+		redis-server --port 6399 --daemonize yes --save '' --appendonly no; \
+		$(CARGO_ENV) cd src-tauri && cargo test -- --ignored; \
+		redis-cli -p 6399 shutdown nosave 2>/dev/null || true; \
+	fi
 
 # Clean build artifacts
 clean:
