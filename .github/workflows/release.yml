@@ -42,6 +42,13 @@ jobs:
         with:
           node-version: 20
 
+      # tauri-action invokes `bun tauri build`, and unlike `bun run tauri`
+      # that form does not put node_modules/.bin on PATH, so it fails with
+      # "tauri: command not found". Installing the CLI globally puts it on
+      # PATH regardless of which form the action uses.
+      - name: Install Tauri CLI
+        run: bun add --global @tauri-apps/cli
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
