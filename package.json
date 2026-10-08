@@ -1,6 +1,6 @@
 {
   "name": "redix",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "The next-generation Redis GUI for power users.",
   "type": "module",
   "scripts": {
